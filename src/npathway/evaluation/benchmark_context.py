@@ -353,7 +353,7 @@ class ContextSpecificityBenchmark(BaseBenchmark):
                 counts = Counter(assignments)
                 total = sum(counts.values())
                 probs = np.array([c / total for c in counts.values()])
-                max_entropy = np.log2(len(assignments)) if len(assignments) > 1 else 1.0
+                max_entropy = np.log2(len(counts)) if len(counts) > 1 else 1.0
                 entropy = -np.sum(probs * np.log2(probs + 1e-12))
                 freq = entropy / max_entropy if max_entropy > 0 else 0.0
 
@@ -411,16 +411,11 @@ class ContextSpecificityBenchmark(BaseBenchmark):
                 sizes.append(size)
                 matrix[p_idx, c_idx] = size
 
-            # Convert sizes to a probability distribution
+            # Convert sizes to proportions (context-specific specificity)
             total = sum(sizes)
             if total > 0:
                 probs = np.array(sizes, dtype=np.float64) / total
-                entropy = -np.sum(
-                    probs * np.log2(probs + 1e-12)
-                )
-                max_entropy = np.log2(n_contexts) if n_contexts > 1 else 1.0
-                normalized = entropy / max_entropy if max_entropy > 0 else 0.0
-                matrix[p_idx, :] = normalized
+                matrix[p_idx, :] = probs
 
         return pd.DataFrame(
             matrix, index=sorted_programs, columns=context_names

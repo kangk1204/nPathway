@@ -160,10 +160,10 @@ for (col in covariate_cols) {
 
 base_terms <- character(0)
 if (!identical(batch_col, "__NONE__")) {
-  base_terms <- c(base_terms, batch_col)
+  base_terms <- c(base_terms, paste0("`", batch_col, "`"))
 }
 if (length(covariate_cols) > 0) {
-  base_terms <- c(base_terms, covariate_cols)
+  base_terms <- c(base_terms, paste0("`", covariate_cols, "`"))
 }
 base_terms_with_group <- c(base_terms, "group")
 design_formula <- as.formula(paste("~", paste(base_terms_with_group, collapse = " + ")))

@@ -532,6 +532,6 @@ class PowerBenchmark(BaseBenchmark):
         rng = np.random.default_rng(seed)
         idx = rng.integers(0, len(values), size=(n_bootstrap, len(values)))
         boot = values[idx].mean(axis=1)
-        lo = float(np.quantile(boot, alpha / 2.0))
-        hi = float(np.quantile(boot, 1.0 - alpha / 2.0))
+        lo = float(np.clip(np.quantile(boot, alpha / 2.0), 0.0, 1.0))
+        hi = float(np.clip(np.quantile(boot, 1.0 - alpha / 2.0), 0.0, 1.0))
         return lo, hi

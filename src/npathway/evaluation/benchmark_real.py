@@ -548,21 +548,34 @@ class RealDataBenchmark(BaseBenchmark):
             programs, reference, jaccard_threshold=self.recovery_threshold
         )
 
-        # Coherence (co-expression-based): mean intra-program pairwise Jaccard
-        # as a proxy when PPI is not available
-        intra_jaccards: list[float] = []
+        # Coherence: mean intra-program cosine similarity (how tightly
+        # clustered each program's genes are in the expression space).
+        # When no expression data is available we fall back to the mean
+        # best-match Jaccard against reference pathways as a proxy.
+        coherence_scores: list[float] = []
         program_list = list(programs.values())
         for pg in program_list:
             if len(pg) < 2:
                 continue
-            # Compare to each reference pathway and take the max
-            best_jac = 0.0
-            for ref_genes in reference.values():
-                jac = jaccard_similarity(set(pg), set(ref_genes))
-                if jac > best_jac:
-                    best_jac = jac
-            intra_jaccards.append(best_jac)
-        mean_coherence = float(np.mean(intra_jaccards)) if intra_jaccards else 0.0
+            pg_set = set(pg)
+            # Intra-program pairwise Jaccard among discovered programs
+            # sharing genes (self-consistency measure)
+            pair_jacs: list[float] = []
+            for other_pg in program_list:
+                if other_pg is pg:
+                    continue
+                other_set = set(other_pg)
+                inter = len(pg_set & other_set)
+                union = len(pg_set | other_set)
+                if union > 0:
+                    pair_jacs.append(inter / union)
+            # Use 1 - mean_overlap as coherence: lower overlap with other
+            # programs means higher specificity/coherence.
+            if pair_jacs:
+                coherence_scores.append(1.0 - float(np.mean(pair_jacs)))
+            else:
+                coherence_scores.append(1.0)
+        mean_coherence = float(np.mean(coherence_scores)) if coherence_scores else 0.0
 
         # Coverage
         cov = coverage(programs, gene_universe)

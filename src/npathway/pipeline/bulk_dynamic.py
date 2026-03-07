@@ -306,7 +306,22 @@ def _load_and_align_inputs(config: BulkDynamicConfig) -> tuple[pd.DataFrame, pd.
         raise ValueError("matrix must include id column + at least 2 sample/gene columns.")
 
     matrix = matrix_raw.set_index(matrix_raw.columns[0]).copy()
-    matrix = matrix.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    matrix_numeric = matrix.apply(pd.to_numeric, errors="coerce")
+    n_nan = int(matrix_numeric.isna().sum().sum())
+    n_originally_missing = int(matrix.isna().sum().sum())
+    n_non_numeric = n_nan - n_originally_missing
+    if n_non_numeric > 0:
+        raise ValueError(
+            f"Expression matrix contains {n_non_numeric} non-numeric entries "
+            f"that cannot be coerced. Clean your input before running the pipeline."
+        )
+    if n_originally_missing > 0:
+        logger.warning(
+            "Expression matrix contains %d missing (NA/blank) entries; "
+            "these will be set to 0.0. Inspect your input if this is unexpected.",
+            n_originally_missing,
+        )
+    matrix = matrix_numeric.fillna(0.0)
 
     orientation = config.matrix_orientation.lower().strip()
     if orientation not in {"genes_by_samples", "samples_by_genes"}:
@@ -314,6 +329,14 @@ def _load_and_align_inputs(config: BulkDynamicConfig) -> tuple[pd.DataFrame, pd.
 
     meta = metadata.copy()
     meta[config.sample_col] = meta[config.sample_col].astype(str)
+    if meta[config.sample_col].duplicated().any():
+        dupes = meta.loc[meta[config.sample_col].duplicated(), config.sample_col].tolist()
+        logger.warning(
+            "Metadata contains %d duplicated sample ID(s): %s. "
+            "Keeping first occurrence only.",
+            len(dupes),
+            ", ".join(sorted(set(dupes))[:5]),
+        )
     meta = meta.drop_duplicates(subset=[config.sample_col]).set_index(config.sample_col)
 
     if orientation == "genes_by_samples":

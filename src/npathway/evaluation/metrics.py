@@ -161,22 +161,27 @@ def novelty_score(
     programs: dict[str, list[str]],
     curated: dict[str, list[str]],
 ) -> float:
-    """Compute the fraction of gene-program edges not found in curated sets.
+    """Compute the fraction of gene-program memberships not covered by curated sets.
 
-    A gene-program edge is the assignment of a gene to a specific program.
-    Novelty measures how much new biology the learned programs capture beyond
-    what is already in curated pathway databases.
+    For each gene-program membership (a gene appearing in a discovered
+    program), checks whether that gene appears in **any** curated pathway.
+    Novelty measures how much new biology the learned programs capture
+    beyond what is already in curated pathway databases.
+
+    Note: this is a gene-level check — if gene X appears in both curated
+    and discovered sets, all its program memberships are counted as
+    "known" regardless of which specific curated pathway contains it.
 
     Args:
         programs: Learned gene programs (program name -> gene list).
         curated: Curated pathway gene sets (pathway name -> gene list).
 
     Returns:
-        Fraction of gene-program assignments in ``programs`` that do not
-        appear in any curated pathway in [0, 1]. Returns 0.0 if programs
+        Fraction of gene-program memberships whose gene does not appear
+        in any curated pathway, in [0, 1]. Returns 0.0 if programs
         are empty.
     """
-    # Build a set of all (gene, pathway) edges in the curated collection
+    # Build a set of all genes present in any curated pathway
     curated_edges: set[str] = set()
     for pathway_name, genes in curated.items():
         for gene in genes:
@@ -555,13 +560,23 @@ def permutation_test_enrichment(
     for _ in range(n_permutations):
         shuffled = universe_arr.copy()
         rng.shuffle(shuffled)
-        # Create shuffled programs with same sizes
+        # Create shuffled programs with same sizes.
+        # Each program draws *without replacement* from the shuffled universe
+        # so that shuffled programs never share genes (matching real programs).
         shuffled_programs: dict[str, list[str]] = {}
         offset = 0
         for name, genes in programs.items():
             size = len(genes)
-            shuffled_programs[name] = shuffled[offset:offset + size]
-            offset = (offset + size) % len(shuffled)
+            end = offset + size
+            if end <= len(shuffled):
+                shuffled_programs[name] = shuffled[offset:end]
+            else:
+                # If total program genes exceed universe size, wrap and
+                # re-shuffle to avoid deterministic overlap.
+                rng.shuffle(shuffled)
+                shuffled_programs[name] = shuffled[:size]
+                end = size
+            offset = end
         null_dist.append(metric_fn(shuffled_programs, curated))
 
     null_mean = float(np.mean(null_dist))

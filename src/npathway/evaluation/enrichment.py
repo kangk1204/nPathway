@@ -339,12 +339,13 @@ def _adaptive_permutation_pvalue(
 
     # Compute p-value
     if len(null_es_same) > 0:
-        p_value = float(n_extreme / len(null_es_same)) if len(null_es_same) > 0 else 0.0
+        p_value = float(n_extreme / len(null_es_same))
     else:
         p_value = 0.0
 
-    # Floor the p-value
+    # Clamp p-value to valid range [floor, 1.0]
     p_value = max(p_value, 1.0 / (total_done + 1))
+    p_value = min(p_value, 1.0)
 
     # Mean of null ES with same sign for NES calculation
     mean_null = float(np.mean(null_es_same)) if null_es_same else 1.0
@@ -1018,15 +1019,16 @@ def effect_size_metrics(
         correction = 1 - 3 / (4 * (n1 + n2) - 9)
         hedges_g_list.append(d * correction)
 
-        # Fold enrichment (ratio of mean rank-metric)
-        mean_all = float(np.mean(all_metrics))
-        fold = mean_in / mean_all if mean_all != 0 else 0.0
+        # Fold enrichment (ratio of mean absolute rank-metric in-set vs out-set)
+        mean_abs_in = float(np.mean(np.abs(in_set)))
+        mean_abs_out = float(np.mean(np.abs(out_set)))
+        fold = mean_abs_in / mean_abs_out if mean_abs_out > 0 else 0.0
         fold_list.append(fold)
 
         # CI via bootstrap-free approximation
         se_fold = abs(fold) / math.sqrt(max(n1, 1))
         z = 1.96
-        fe_lo_list.append(fold - z * se_fold)
+        fe_lo_list.append(max(fold - z * se_fold, 0.0))
         fe_hi_list.append(fold + z * se_fold)
 
     df["cohens_d"] = cohens_d_list

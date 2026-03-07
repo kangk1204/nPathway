@@ -368,9 +368,12 @@ def _topic_diversity_loss(topic_embeddings: torch.Tensor) -> torch.Tensor:
     t_norm = F.normalize(topic_embeddings, dim=-1)
     sim = t_norm @ t_norm.T  # (K, K)
     n_topics = sim.shape[0]
-    # Mean off-diagonal similarity
+    # Mean off-diagonal absolute similarity — use abs() so that both
+    # positive similarity (topic overlap) and negative similarity
+    # (anti-correlated topics) are penalised, preventing the optimiser
+    # from trivially minimising the loss by flipping sign.
     mask = ~torch.eye(n_topics, dtype=torch.bool, device=sim.device)
-    return sim[mask].mean()
+    return sim[mask].abs().mean()
 
 
 # ======================================================================
@@ -786,7 +789,15 @@ class TopicModelProgramDiscovery(BaseProgramDiscovery):
                     epoch, self.n_epochs, avg_loss, avg_nll, avg_kl, lr_now, val_info,
                 )
 
-        # Restore best model if early stopping was used and found a best
+        # Restore best model if early stopping was used.
+        # If early_stopping_patience > 0 but best_state_dict is still None,
+        # the very first epoch was the best (no improvement was ever recorded
+        # because the initial val loss was already best).  Capture the current
+        # state so we always have a valid checkpoint to restore.
+        if self.early_stopping_patience > 0 and best_state_dict is None:
+            best_state_dict = {
+                k: v.cpu().clone() for k, v in model.state_dict().items()
+            }
         if best_state_dict is not None:
             model.load_state_dict(
                 {k: v.to(device) for k, v in best_state_dict.items()}

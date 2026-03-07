@@ -66,8 +66,8 @@ def _generate_bulk_demo_inputs(output_dir: Path) -> tuple[Path, Path, Path]:
     _write_gmt(
         gmt_path,
         {
-            "Case_Inflammatory_Module": genes[:30],
-            "Control_Metabolic_Module": genes[24:54],
+            "Case_Inflammatory_Module": genes[:24],
+            "Control_Metabolic_Module": genes[24:48],
             "Shared_Background_Module": genes[60:95],
         },
     )

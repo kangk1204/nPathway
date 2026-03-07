@@ -438,3 +438,106 @@ def test_program_stability_gene_membership_mismatch_not_counted_stable() -> None
 
     assert result["mean_jaccard"] < 1.0
     assert result["mean_gene_stability"] < 1.0
+
+
+def test_program_stability_empty_genes() -> None:
+    """program_stability returns zeros for empty gene list."""
+    result = program_stability(
+        np.empty((0, 4)),
+        [],
+        lambda e, n, **kw: {},
+        n_resamples=3,
+    )
+    assert result["mean_jaccard"] == 0.0
+    assert result["mean_gene_stability"] == 0.0
+    assert result["per_resample_jaccard"] == []
+    assert result["gene_stability"] == {}
+
+
+def test_program_stability_deterministic_discovery_gives_perfect_score() -> None:
+    """Deterministic discovery that always returns the same split should give
+    high (ideally perfect) jaccard and gene stability."""
+    rng = np.random.default_rng(99)
+    embeddings = rng.standard_normal((20, 5))
+    gene_names = [f"G{i}" for i in range(20)]
+
+    def _fixed_discovery(
+        emb: np.ndarray, names: list[str], **kw: object
+    ) -> dict[str, list[str]]:
+        sorted_names = sorted(names)
+        mid = len(sorted_names) // 2
+        return {"A": sorted_names[:mid], "B": sorted_names[mid:]}
+
+    result = program_stability(
+        embeddings,
+        gene_names,
+        _fixed_discovery,
+        n_resamples=10,
+        subsample_fraction=0.8,
+        random_state=42,
+    )
+
+    assert result["mean_jaccard"] > 0.6, (
+        f"Deterministic discovery should have high jaccard, got {result['mean_jaccard']}"
+    )
+    assert len(result["per_resample_jaccard"]) == 10
+    assert all(0.0 <= v <= 1.0 for v in result["gene_stability"].values())
+    assert result["std_jaccard"] >= 0.0
+
+
+def test_program_stability_single_gene() -> None:
+    """Single-gene universe should not crash."""
+    result = program_stability(
+        np.array([[1.0, 2.0]]),
+        ["ONLY"],
+        lambda e, n, **kw: {"p0": list(n)},
+        n_resamples=3,
+        subsample_fraction=1.0,
+    )
+    assert "mean_jaccard" in result
+    assert "ONLY" in result["gene_stability"]
+
+
+def test_program_stability_subsample_fraction_one() -> None:
+    """Full-sample resampling (fraction=1.0) with deterministic discovery
+    should yield perfect stability."""
+    embeddings = np.eye(6, dtype=np.float64)
+    gene_names = [f"g{i}" for i in range(6)]
+
+    def _fixed(emb: np.ndarray, names: list[str], **kw: object) -> dict[str, list[str]]:
+        return {"p0": names[:3], "p1": names[3:]}
+
+    result = program_stability(
+        embeddings,
+        gene_names,
+        _fixed,
+        n_resamples=5,
+        subsample_fraction=1.0,
+        random_state=0,
+    )
+
+    assert abs(result["mean_jaccard"] - 1.0) < 1e-10
+    for g, score in result["gene_stability"].items():
+        assert abs(score - 1.0) < 1e-10, f"Gene {g} should be perfectly stable"
+
+
+def test_program_stability_unmatched_ref_programs_skipped() -> None:
+    """If a reference program has no genes in the subsample, it should be
+    skipped in jaccard computation without error."""
+    embeddings = np.eye(10, dtype=np.float64)
+    gene_names = [f"g{i}" for i in range(10)]
+
+    def _discovery(emb: np.ndarray, names: list[str], **kw: object) -> dict[str, list[str]]:
+        return {"p0": names[:3], "p1": names[3:6], "p2": names[6:]}
+
+    result = program_stability(
+        embeddings,
+        gene_names,
+        _discovery,
+        n_resamples=5,
+        subsample_fraction=0.5,
+        random_state=123,
+    )
+
+    assert 0.0 <= result["mean_jaccard"] <= 1.0
+    assert len(result["gene_stability"]) == 10

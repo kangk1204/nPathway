@@ -49,9 +49,15 @@ def _count_non_finite_entries(df: pd.DataFrame) -> int:
 
 
 def _count_non_integer_entries(df: pd.DataFrame) -> int:
-    """Count numeric entries that are not integer-like."""
-    values = df.to_numpy(dtype=float)
-    return int((~np.isclose(values, np.round(values), rtol=0.0, atol=1e-9)).sum())
+    """Count numeric entries that are not integer-like.
+
+    Uses modular arithmetic (``x % 1``) instead of ``round()`` comparison
+    to avoid false positives for very large integers (>2^53) where
+    float64 loses precision.
+    """
+    values = df.to_numpy(dtype=np.float64)
+    remainder = np.abs(np.mod(values, 1.0))
+    return int(((remainder > 1e-9) & (remainder < 1.0 - 1e-9)).sum())
 
 
 def _warn_if_minimal_group_size(
