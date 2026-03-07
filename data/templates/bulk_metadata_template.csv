@@ -1,0 +1,7 @@
+sample,condition,batch
+case_01,case,batch_1
+case_02,case,batch_1
+case_03,case,batch_2
+control_01,control,batch_1
+control_02,control,batch_2
+control_03,control,batch_2

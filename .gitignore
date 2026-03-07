@@ -1,0 +1,108 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# macOS resource forks (AppleDouble files created on HFS+/APFS external drives)
+._*
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Large data / model files
+models/scgpt_whole_human/
+models/geneformer/
+models/
+*.npz
+data/*.h5ad
+data/*.h5
+data/*.loom
+data/**/*.h5ad
+data/**/*.h5
+data/**/*.loom
+data/**/*.gz
+data/**/*.xlsx
+data/PBMC/
+data/bulk_real_*/
+data/burczynski06/
+data/moignard15/
+data/paul15/
+data/raw/
+data/reference/
+data/starcat_cache*/
+!data/scrna_demo_case_vs_ctrl/demo_scrna_case_ctrl.h5ad
+
+# Results (generated, not source)
+results/
+results/figures/
+benchmark_report.pdf
+benchmark_fm_*.pdf
+benchmark_largescale.pdf
+benchmark_multi_dataset.pdf
+
+# Local/private tooling
+.claude/
+.latex-env/
+.r-lib/
+codex-parallel.log
+CLAUDE.md
+foundation_model_gene_programs_prompts.md
+run_codex_parallel.sh
+repro/
+
+# Downloaded datasets
+data/external/
+
+# Private manuscript and submission materials
+paper/
+final_delivery_*/
+docs/alzheimers_case_study_plan_*.md
+docs/methods_submission_*.md
+docs/methods_special_issue_submission_plan_*.md
+docs/methods_cover_letter_draft_*.md
+docs/phase4_manuscript_outline.md
+docs/dynamic_pathway_product_blueprint_*.md
+docs/agent*_*.md
+docs/agent_supervisor_execution_summary_*.md
+docs/pathway_agent_framework_*.md
+scripts/run_publication_suite.sh
+scripts/validate_manuscript_consistency.py
+scripts/build_submission_stats_package.py
+scripts/package_publication_artifacts.py
+scripts/patch_manuscript_claim_blocks.py
+scripts/generate_paper_draft.py
+scripts/check_manuscript_consistency.py
+scripts/run_gse203206_case_study.py
+scripts/run_gse147528_ec_case_study.py
+scripts/run_gse203206_common_de_comparison.py
+scripts/run_gse214921_mdd_case_study.py
+scripts/build_de_ranking_sensitivity_figure.py
+scripts/build_bulk_common_de_engine_figure.py
+scripts/build_mdd_deseq2_validation_figure.py
+tests/test_de_ranking_sensitivity_figure.py
+tests/test_bulk_common_de_engine_figure.py
+tests/test_mdd_deseq2_validation_figure.py
+tests/test_manuscript_consistency.py
+tests/test_manuscript_consistency_checker.py
+tests/test_submission_stats_package.py

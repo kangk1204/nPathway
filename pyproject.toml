@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "npathway"
+version = "0.1.0"
+description = "Foundation Model-Derived Gene Programs for Context-Aware Gene Set Enrichment Analysis"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "nPathway Team"},
+]
+keywords = ["bioinformatics", "gene-programs", "GSEA", "foundation-models", "single-cell"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "scikit-learn>=1.3",
+    "anndata>=0.10",
+    "scanpy>=1.9",
+    "matplotlib>=3.7",
+    "seaborn>=0.12",
+    "torch>=2.0",
+    "igraph>=0.11",
+    "leidenalg>=0.10",
+    "hdbscan>=0.8.33",
+    "umap-learn>=0.5",
+    "networkx>=3.0",
+    "statsmodels>=0.14",
+    "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+scgpt = ["scgpt"]
+geneformer = ["transformers>=4.30"]
+scbert = ["performer-pytorch>=1.1"]
+all-models = ["scgpt", "transformers>=4.30", "performer-pytorch>=1.1"]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.1",
+    "mypy>=1.5",
+]
+report = [
+    "reportlab>=4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/npathway/npathway"
+Documentation = "https://npathway.readthedocs.io"
+Repository = "https://github.com/npathway/npathway"
+
+[project.scripts]
+npathway-validate-inputs = "npathway.cli.validate_inputs:main"
+npathway-demo = "npathway.cli.demo:main"
+npathway-bulk-workflow = "npathway.cli.bulk_workflow:main"
+npathway-compare-gsea = "npathway.cli.compare_gsea:main"
+npathway-scrna-easy = "npathway.cli.scrna_easy:main"
+npathway-convert-seurat = "npathway.cli.convert_seurat:main"
+npathway-convert-10x = "npathway.cli.convert_10x:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [
+    "._*",
+    "**/.git",
+    "**/__pycache__",
+    "**/._*",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+# compileall note: macOS AppleDouble (._*) files on external drives contain
+# null bytes and cause SyntaxError. Always run with: python -m compileall -x "^\._|/\._"

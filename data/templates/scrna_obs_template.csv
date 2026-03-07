@@ -1,0 +1,7 @@
+cell_id,donor_id,condition,cell_type,batch
+cell_0001,donor_01,case,CD4_T,batch_1
+cell_0002,donor_01,case,CD4_T,batch_1
+cell_0003,donor_01,case,B_cell,batch_1
+cell_0004,donor_02,case,CD4_T,batch_2
+cell_0005,donor_03,control,CD4_T,batch_1
+cell_0006,donor_04,control,B_cell,batch_2
