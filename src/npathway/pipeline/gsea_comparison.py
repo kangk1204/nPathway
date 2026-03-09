@@ -11,7 +11,7 @@ import pandas as pd
 
 from npathway.evaluation.enrichment import run_enrichment
 from npathway.evaluation.metrics import compute_overlap_matrix
-from npathway.utils.gmt_io import read_gmt
+from npathway.utils.gmt_io import read_gmt, write_gmt
 
 
 @dataclass
@@ -28,6 +28,8 @@ class GSEAComparisonResult:
     n_focus_genes: int
     n_focus_genes_in_anchor_program: int
     n_focus_genes_in_curated_sets: int
+    curated_panel_mode: str | None = None
+    n_curated_panel_sets: int = 0
 
 
 def load_ranked_gene_table(
@@ -157,6 +159,37 @@ def compare_curated_vs_dynamic_gsea(
     )
     focus_gene_df.to_csv(outdir / "focus_gene_membership.csv", index=False)
 
+    curated_panel_mode, curated_panel_sets = _select_curated_panel_sets(
+        curated_sets=curated_sets,
+        curated_df=curated_df,
+        overlap_df=overlap_df,
+        anchor_program=anchor_program,
+        anchor_reference=anchor_reference,
+    )
+    curated_panel_df = pd.DataFrame()
+    if curated_panel_sets:
+        curated_panel_df = run_enrichment(
+            gene_list=[],
+            gene_programs=curated_panel_sets,
+            method="gsea",
+            ranked_genes=ranked_genes,
+            n_perm=n_perm,
+            seed=seed,
+        )
+        curated_panel_df.to_csv(outdir / "curated_panel_gsea.csv", index=False)
+        write_gmt(curated_panel_sets, outdir / "curated_panel_gene_sets.gmt")
+        (outdir / "curated_panel_manifest.json").write_text(
+            json.dumps(
+                {
+                    "mode": curated_panel_mode,
+                    "pathways": list(curated_panel_sets.keys()),
+                    "source_curated_gmt": str(curated_gmt_path),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
     side_by_side_df = _build_side_by_side(dynamic_df, curated_df, anchor_program, anchor_reference)
     side_by_side_df.to_csv(outdir / "gsea_side_by_side.csv", index=False)
 
@@ -175,6 +208,8 @@ def compare_curated_vs_dynamic_gsea(
         n_focus_genes_in_curated_sets=int(focus_gene_df["in_any_curated_set"].sum())
         if not focus_gene_df.empty
         else 0,
+        curated_panel_mode=curated_panel_mode,
+        n_curated_panel_sets=len(curated_panel_sets),
     )
     (outdir / "comparison_summary.json").write_text(
         json.dumps(asdict(result), indent=2), encoding="utf-8"
@@ -185,9 +220,79 @@ def compare_curated_vs_dynamic_gsea(
         curated_df=curated_df,
         overlap_df=overlap_df,
         focus_gene_df=focus_gene_df,
+        curated_panel_df=curated_panel_df,
         outdir=outdir,
     )
     return result
+
+
+def _select_curated_panel_sets(
+    *,
+    curated_sets: dict[str, list[str]],
+    curated_df: pd.DataFrame,
+    overlap_df: pd.DataFrame,
+    anchor_program: str | None,
+    anchor_reference: str | None,
+    max_sets: int = 5,
+) -> tuple[str | None, dict[str, list[str]]]:
+    """Select a compact curated panel directly from the observed results."""
+    ordered_names: list[str] = []
+
+    def _append(name: str | None) -> None:
+        if not name:
+            return
+        key = str(name)
+        if key in curated_sets and key not in ordered_names:
+            ordered_names.append(key)
+
+    _append(anchor_reference)
+
+    if anchor_program and not overlap_df.empty and {"dynamic_program", "curated_set"}.issubset(overlap_df.columns):
+        overlap_rank = overlap_df.copy()
+        overlap_rank["dynamic_program"] = overlap_rank["dynamic_program"].astype(str)
+        overlap_rank["curated_set"] = overlap_rank["curated_set"].astype(str)
+        if "jaccard" in overlap_rank.columns:
+            overlap_rank["jaccard"] = pd.to_numeric(overlap_rank["jaccard"], errors="coerce").fillna(0.0)
+        else:
+            overlap_rank["jaccard"] = 0.0
+        if "overlap_n" in overlap_rank.columns:
+            overlap_rank["overlap_n"] = pd.to_numeric(overlap_rank["overlap_n"], errors="coerce").fillna(0.0)
+        else:
+            overlap_rank["overlap_n"] = 0.0
+        anchor_rows = overlap_rank.loc[overlap_rank["dynamic_program"] == str(anchor_program)].copy()
+        anchor_rows = anchor_rows.sort_values(["jaccard", "overlap_n"], ascending=[False, False])
+        for curated_name in anchor_rows["curated_set"].tolist():
+            _append(curated_name)
+            if len(ordered_names) >= max_sets:
+                break
+
+    if not curated_df.empty and "program" in curated_df.columns:
+        curated_rank = curated_df.copy()
+        curated_rank["program"] = curated_rank["program"].astype(str)
+        if "fdr" in curated_rank.columns:
+            curated_rank["fdr"] = pd.to_numeric(curated_rank["fdr"], errors="coerce").fillna(1.0)
+        else:
+            curated_rank["fdr"] = 1.0
+        if "nes" in curated_rank.columns:
+            curated_rank["nes"] = pd.to_numeric(curated_rank["nes"], errors="coerce").fillna(0.0)
+        else:
+            curated_rank["nes"] = 0.0
+        if "p_value" in curated_rank.columns:
+            curated_rank["p_value"] = pd.to_numeric(curated_rank["p_value"], errors="coerce").fillna(1.0)
+        else:
+            curated_rank["p_value"] = 1.0
+        curated_rank["abs_nes"] = curated_rank["nes"].abs()
+        curated_rank = curated_rank.sort_values(
+            ["fdr", "abs_nes", "p_value", "program"],
+            ascending=[True, False, True, True],
+        )
+        for curated_name in curated_rank["program"].tolist():
+            _append(curated_name)
+            if len(ordered_names) >= max_sets:
+                break
+
+    selected = {name: list(curated_sets[name]) for name in ordered_names[:max_sets]}
+    return ("auto_result_driven" if selected else None), selected
 
 
 def _filter_gene_sets_to_universe(
@@ -322,6 +427,7 @@ def _write_summary_markdown(
     curated_df: pd.DataFrame,
     overlap_df: pd.DataFrame,
     focus_gene_df: pd.DataFrame,
+    curated_panel_df: pd.DataFrame,
     outdir: Path,
 ) -> None:
     dynamic_top = dynamic_df.head(5)
@@ -376,6 +482,15 @@ def _write_summary_markdown(
                 f"curated={bool(row['in_any_curated_set'])}, "
                 f"dynamic_programs={row['dynamic_programs'] or 'NA'}, "
                 f"curated_sets={row['curated_sets'] or 'NA'}"
+            )
+
+    if not curated_panel_df.empty:
+        lines.extend(["", "## Canonical Curated Panel", ""])
+        panel_top = curated_panel_df.sort_values(["fdr", "nes"], ascending=[True, False]).copy()
+        for _, row in panel_top.iterrows():
+            lines.append(
+                f"- {row['program']}: NES={float(row['nes']):.3f}, "
+                f"FDR={float(row['fdr']):.4f}, hits={int(row.get('n_hits', 0))}"
             )
 
     (outdir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

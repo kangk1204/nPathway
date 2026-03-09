@@ -112,10 +112,12 @@ def test_bulk_dynamic_cli_runs_on_bundled_demo_dataset(tmp_path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert (outdir / "de_results.csv").exists()
-    assert (outdir / "dynamic_programs.gmt").exists()
+    assert (outdir / "differential" / "de_results.csv").exists()
+    assert (outdir / "discovery" / "dynamic_programs.gmt").exists()
     assert (outdir / "summary.md").exists()
-    assert (outdir / "program_annotation_matches.csv").exists()
+    assert (outdir / "annotation" / "program_annotation_matches.csv").exists()
+    assert (outdir / "annotation" / "program_reference_source_summary.csv").exists()
+    assert (outdir / "annotation" / "program_reference_family_summary.csv").exists()
 
 
 def test_bulk_dynamic_cli_uses_external_ranking(tmp_path) -> None:
@@ -197,6 +199,6 @@ def test_bulk_dynamic_cli_uses_external_ranking(tmp_path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    ranked_out = pd.read_csv(outdir / "ranked_genes_for_gsea.csv")
+    ranked_out = pd.read_csv(outdir / "differential" / "ranked_genes_for_gsea.csv")
     assert ranked_out["gene"].tolist()[:4] == ranked["gene"].tolist()[:4]
     assert ranked_out["score"].tolist()[:4] == ranked["score"].tolist()[:4]

@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from npathway.pipeline.bulk_dynamic import (
     BulkDynamicConfig,
     _build_context_membership_scores,
+    _summarize_reference_annotation_layers,
     run_bulk_dynamic_pipeline,
 )
 
@@ -65,11 +66,11 @@ def test_bulk_dynamic_pipeline_3v3(tmp_path) -> None:
     assert result.n_genes == 40
     assert result.n_programs > 0
 
-    de_path = outdir / "de_results.csv"
-    gsea_path = outdir / "enrichment_gsea_with_claim_gates.csv"
-    context_path = outdir / "contextual_membership_scores.csv"
+    de_path = outdir / "differential" / "de_results.csv"
+    gsea_path = outdir / "enrichment" / "enrichment_gsea_with_claim_gates.csv"
+    context_path = outdir / "enrichment" / "contextual_membership_scores.csv"
     summary_path = outdir / "summary.md"
-    gmt_path = outdir / "dynamic_programs.gmt"
+    gmt_path = outdir / "discovery" / "dynamic_programs.gmt"
 
     assert de_path.exists()
     assert gsea_path.exists()
@@ -162,17 +163,70 @@ def test_bulk_dynamic_pipeline_program_annotation_with_custom_gmt(tmp_path) -> N
     )
     run_bulk_dynamic_pipeline(cfg, outdir)
 
-    ann_path = outdir / "program_annotation_matches.csv"
-    overlap_path = outdir / "program_reference_overlap_long.csv"
-    rename_path = outdir / "program_renaming_map.csv"
+    ann_path = outdir / "annotation" / "program_annotation_matches.csv"
+    overlap_path = outdir / "annotation" / "program_reference_overlap_long.csv"
+    source_summary_path = outdir / "annotation" / "program_reference_source_summary.csv"
+    family_summary_path = outdir / "annotation" / "program_reference_family_summary.csv"
+    rename_path = outdir / "annotation" / "program_renaming_map.csv"
     assert ann_path.exists()
     assert overlap_path.exists()
+    assert source_summary_path.exists()
+    assert family_summary_path.exists()
     assert rename_path.exists()
 
     ann = pd.read_csv(ann_path)
     assert "best_reference_name" in ann.columns
     assert "best_jaccard" in ann.columns
     assert len(ann) > 0
+
+
+def test_summarize_reference_annotation_layers_collapses_duplicate_families() -> None:
+    """Annotation summary should provide source- and family-level exports."""
+    overlap = pd.DataFrame(
+        {
+            "program": ["program_1", "program_1", "program_2"],
+            "reference_name": [
+                "WP::ALZHEIMERS_DISEASE",
+                "KEGG::ALZHEIMERS_DISEASE",
+                "REACTOME::INNATE_IMMUNE_SYSTEM",
+            ],
+            "jaccard": [0.17, 0.15, 0.12],
+            "overlap_n": [8, 7, 6],
+            "program_n": [24, 24, 18],
+            "reference_n": [50, 55, 30],
+        }
+    )
+
+    source_summary, family_summary = _summarize_reference_annotation_layers(overlap)
+
+    assert {"WikiPathways", "KEGG", "Reactome"} <= set(source_summary["source_display"].astype(str))
+    ad_row = family_summary.loc[family_summary["family_key"] == "ALZHEIMERS DISEASE"].iloc[0]
+    assert ad_row["references_merged"] == 2
+    assert "WikiPathways" in ad_row["sources_display"]
+    assert "KEGG" in ad_row["sources_display"]
+    assert float(ad_row["disease_priority_score"]) > 0
+    assert ad_row["priority_band"] == "Disease-prioritized"
+    assert float(ad_row["interpretation_score"]) > float(ad_row["best_jaccard"])
+
+
+def test_summarize_reference_annotation_layers_prioritizes_disease_families() -> None:
+    overlap = pd.DataFrame(
+        {
+            "program": ["program_1", "program_2"],
+            "reference_name": [
+                "KEGG::ALZHEIMERS_DISEASE",
+                "REACTOME::FASTK family proteins regulate processing and stability of mitochondrial RNAs",
+            ],
+            "jaccard": [0.11, 0.71],
+            "overlap_n": [6, 14],
+            "program_n": [24, 24],
+            "reference_n": [55, 28],
+        }
+    )
+
+    _, family_summary = _summarize_reference_annotation_layers(overlap)
+    assert family_summary.iloc[0]["family_key"] == "ALZHEIMERS DISEASE"
+    assert "interpretation_score" in family_summary.columns
 
 
 def test_build_context_membership_scores_empty_input_schema() -> None:

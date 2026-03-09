@@ -3,6 +3,9 @@
 This module defines the interface that all gene program discovery methods
 must implement, ensuring a consistent API across clustering, topic model,
 attention-based, and ensemble approaches.
+
+Supports both **hard** (each gene in exactly one program) and **soft**
+(each gene has weighted membership across multiple programs) partitioning.
 """
 
 from __future__ import annotations
@@ -21,8 +24,9 @@ class BaseProgramDiscovery(ABC):
 
     All discovery methods share a common fit/transform interface.  After
     calling :meth:`fit`, the discovered programs can be retrieved via
-    :meth:`get_programs` (gene lists) or :meth:`get_program_scores`
-    (gene lists with membership scores).
+    :meth:`get_programs` (gene lists), :meth:`get_program_scores`
+    (gene lists with membership scores), or :meth:`get_soft_programs`
+    (weighted multi-program gene membership).
 
     Attributes
     ----------
@@ -30,11 +34,16 @@ class BaseProgramDiscovery(ABC):
         Discovered gene programs after fitting.  ``None`` before fit.
     program_scores_ : dict[str, list[tuple[str, float]]] | None
         Gene-program membership scores after fitting.  ``None`` before fit.
+    soft_programs_ : dict[str, dict[str, float]] | None
+        Soft (weighted) gene-program membership.  Each key is a program
+        name and each value maps gene names to their membership weight.
+        ``None`` before fit; subclasses may populate this natively.
     """
 
     def __init__(self) -> None:
         self.programs_: dict[str, list[str]] | None = None
         self.program_scores_: dict[str, list[tuple[str, float]]] | None = None
+        self.soft_programs_: dict[str, dict[str, float]] | None = None
 
     # ------------------------------------------------------------------
     # Abstract interface
@@ -97,6 +106,91 @@ class BaseProgramDiscovery(ABC):
             If the model has not been fitted yet.
         """
         ...
+
+    # ------------------------------------------------------------------
+    # Soft membership interface (concrete, with fallback)
+    # ------------------------------------------------------------------
+
+    def get_soft_programs(
+        self, threshold: float = 0.01
+    ) -> dict[str, dict[str, float]]:
+        """Return soft (weighted) gene-program membership.
+
+        If the subclass populates :attr:`soft_programs_` natively (e.g.
+        ETM topic distributions, distance-to-centroid weights), that is
+        returned after filtering by *threshold*.  Otherwise a fallback is
+        constructed from :meth:`get_program_scores` with weight 1.0 for
+        genes that only appear in the hard partition.
+
+        Parameters
+        ----------
+        threshold : float
+            Minimum membership weight to include a gene in a program.
+
+        Returns
+        -------
+        dict[str, dict[str, float]]
+            ``{program_name: {gene: weight, ...}, ...}``
+        """
+        self._check_is_fitted()
+
+        if self.soft_programs_ is not None:
+            return {
+                prog: {g: w for g, w in gw.items() if w >= threshold}
+                for prog, gw in self.soft_programs_.items()
+            }
+
+        # Fallback: construct from program_scores_
+        assert self.program_scores_ is not None
+        soft: dict[str, dict[str, float]] = {}
+        for prog, scored in self.program_scores_.items():
+            soft[prog] = {g: w for g, w in scored if w >= threshold}
+        return soft
+
+    def get_gene_memberships(self) -> dict[str, dict[str, float]]:
+        """Return per-gene membership across all programs.
+
+        This is the transpose view of :meth:`get_soft_programs`: for
+        each gene, a mapping of ``{program_name: weight}``.
+
+        Returns
+        -------
+        dict[str, dict[str, float]]
+            ``{gene: {program_name: weight, ...}, ...}``
+        """
+        soft = self.get_soft_programs(threshold=0.0)
+        gene_map: dict[str, dict[str, float]] = {}
+        for prog, gw in soft.items():
+            for gene, weight in gw.items():
+                gene_map.setdefault(gene, {})[prog] = weight
+        return gene_map
+
+    def to_weighted_gmt(self, filepath: str, threshold: float = 0.01) -> None:
+        """Export soft programs in weighted GMT format.
+
+        Each gene entry is written as ``gene,weight`` using the utility
+        :func:`~npathway.utils.gmt_io.weighted_programs_to_gmt`.
+
+        Parameters
+        ----------
+        filepath : str
+            Destination file path.
+        threshold : float
+            Minimum weight to include a gene.
+        """
+        from npathway.utils.gmt_io import weighted_programs_to_gmt
+
+        soft = self.get_soft_programs(threshold=threshold)
+        # Convert dict[str, dict[str, float]] -> dict[str, list[tuple[str, float]]]
+        weighted: dict[str, list[tuple[str, float]]] = {}
+        for prog, gw in soft.items():
+            pairs = sorted(gw.items(), key=lambda t: t[1], reverse=True)
+            if pairs:
+                weighted[prog] = pairs
+        if not weighted:
+            logger.warning("No programs passed threshold %.4f for GMT export.", threshold)
+            return
+        weighted_programs_to_gmt(weighted, filepath)
 
     # ------------------------------------------------------------------
     # Concrete helpers

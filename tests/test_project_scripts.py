@@ -22,6 +22,7 @@ SEURAT_CONVERT_SCRIPT = ROOT / "scripts" / "convert_seurat_to_h5ad.py"
 TENX_CONVERT_SCRIPT = ROOT / "scripts" / "convert_10x_to_h5ad.py"
 INSTALL_EASY_SCRIPT = ROOT / "scripts" / "install_npathway_easy.sh"
 PUBLIC_SNAPSHOT_SCRIPT = ROOT / "scripts" / "prepare_public_github_snapshot.sh"
+PUBLIC_REFERENCE_BUILD_SCRIPT = ROOT / "scripts" / "build_public_reference_stack.py"
 
 
 def test_pyproject_declares_public_entrypoints() -> None:
@@ -30,6 +31,7 @@ def test_pyproject_declares_public_entrypoints() -> None:
 
     assert "scbert = [\"performer-pytorch>=1.1\"]" in pyproject
     assert "all-models = [\"scgpt\", \"transformers>=4.30\", \"performer-pytorch>=1.1\"]" in pyproject
+    assert 'npathway = "npathway.cli.main:main"' in pyproject
     assert 'npathway-validate-inputs = "npathway.cli.validate_inputs:main"' in pyproject
     assert 'npathway-demo = "npathway.cli.demo:main"' in pyproject
     assert 'npathway-bulk-workflow = "npathway.cli.bulk_workflow:main"' in pyproject
@@ -46,14 +48,32 @@ def test_readme_is_github_friendly_and_public_only() -> None:
     assert "Option 1. One-click install" in readme
     assert "bash scripts/install_npathway_easy.sh" in readme
     assert "auto-prefers `python3.11`, `python3.12`, or `python3.10`" in readme
+    assert "npathway quickstart" in readme
+    assert "npathway demo bulk" in readme
+    assert "npathway demo scrna" in readme
+    assert "results/demo_bulk_case_vs_control/index.html" in readme
+    assert "results/demo_scrna_case_vs_control/index.html" in readme
+    assert "interactive plots and interactive tables" in readme
+    assert "docs/assets/npathway_workflow_overview.png" in readme
+    assert "docs/assets/npathway_dashboard_preview.png" in readme
+    assert "npathway validate bulk" in readme
+    assert "npathway validate scrna" in readme
+    assert "npathway run bulk" in readme
+    assert "npathway run scrna" in readme
+    assert "npathway compare --help" in readme
+    assert "npathway convert seurat --check-only" in readme
+    assert "npathway convert 10x --check-only" in readme
     assert "npathway-demo bulk" in readme
     assert "npathway-demo scrna" in readme
-    assert "npathway-validate-inputs bulk" in readme
+    assert "npathway-validate-inputs" in readme
     assert "npathway-bulk-workflow" in readme
     assert "npathway-scrna-easy" in readme
     assert "npathway-compare-gsea" in readme
     assert "npathway-convert-seurat" in readme
     assert "npathway-convert-10x" in readme
+    assert "npathway references build --output-dir data/reference/public" in readme
+    assert "reactome,wikipathways,pathwaycommons" in readme
+    assert "Reference Layers" in readme
     assert "How nPathway Differs From Standard GSEA" in readme
     assert "Private manuscript materials, submission figures, and large generated results" in readme
     assert "prepare_public_github_snapshot.sh --dry-run" in readme
@@ -85,6 +105,8 @@ def test_public_docs_and_templates_exist() -> None:
     assert GITIGNORE.exists()
     assert QUICKSTART_GUIDE.exists()
     assert USAGE_MODES_GUIDE.exists()
+    assert (ROOT / "docs" / "assets" / "npathway_workflow_overview.png").exists()
+    assert (ROOT / "docs" / "assets" / "npathway_dashboard_preview.png").exists()
     assert (ROOT / "data" / "templates" / "README.md").exists()
     assert (ROOT / "data" / "templates" / "bulk_matrix_template.csv").exists()
     assert (ROOT / "data" / "templates" / "bulk_metadata_template.csv").exists()
@@ -155,6 +177,7 @@ def test_public_cli_help_scripts_work_without_editable_install() -> None:
         SCRNA_EASY_SCRIPT,
         SEURAT_CONVERT_SCRIPT,
         TENX_CONVERT_SCRIPT,
+        PUBLIC_REFERENCE_BUILD_SCRIPT,
     ]:
         result = subprocess.run(
             [sys.executable, str(script), "--help"],
@@ -195,10 +218,36 @@ def test_public_cli_help_scripts_work_without_editable_install() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
+    assert "npathway --help" in result.stdout
+    assert "npathway quickstart" in result.stdout
     assert "npathway-demo --help" in result.stdout
     assert "npathway-bulk-workflow --help" in result.stdout
     assert "npathway-scrna-easy --help" in result.stdout
     assert "npathway-compare-gsea --help" in result.stdout
+
+    result = subprocess.run(
+        [sys.executable, "-m", "npathway.cli.main", "quickstart"],
+        cwd=ROOT,
+        env={**env, "PYTHONPATH": str(ROOT / "src")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "npathway demo bulk" in result.stdout
+    assert "npathway run bulk --help" in result.stdout
+    assert "results/demo_bulk_case_vs_control/index.html" in result.stdout
+
+    result = subprocess.run(
+        [sys.executable, "-m", "npathway.cli.main", "references", "--help"],
+        cwd=ROOT,
+        env={**env, "PYTHONPATH": str(ROOT / "src")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "npathway references build" in result.stdout
 
     result = subprocess.run(
         ["bash", str(PUBLIC_SNAPSHOT_SCRIPT), "--help"],

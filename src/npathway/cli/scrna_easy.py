@@ -1008,8 +1008,8 @@ def _run_simple_subset(
     comparison_result = None
     if curated_gmt:
         comparison_result = compare_curated_vs_dynamic_gsea(
-            ranked_genes_path=Path(result.output_dir) / "ranked_genes_for_gsea.csv",
-            dynamic_gmt_path=Path(result.output_dir) / "dynamic_programs.gmt",
+            ranked_genes_path=Path(result.output_dir) / "differential" / "ranked_genes_for_gsea.csv",
+            dynamic_gmt_path=Path(result.output_dir) / "discovery" / "dynamic_programs.gmt",
             curated_gmt_path=curated_gmt,
             output_dir=Path(result.output_dir) / "comparison",
             focus_genes=list(focus_genes),
@@ -1021,7 +1021,7 @@ def _run_simple_subset(
         artifacts = build_dynamic_dashboard_package(
             DashboardConfig(
                 results_dir=result.output_dir,
-                output_dir=str(Path(result.output_dir) / "dashboard"),
+                output_dir=str(Path(result.output_dir)),
                 title=f"nPathway Dashboard: {group_a} vs {group_b}",
                 top_k=dashboard_top_k,
                 include_pdf=include_pdf,
@@ -1243,20 +1243,34 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--curated-gmt", default=None, help="Optional curated GMT for same-ranked-list comparison after each run.")
     parser.add_argument("--annotation-gmt", default=None, help="Optional GMT used to annotate program labels.")
-    parser.add_argument("--annotation-collections", default="hallmark,go_bp,kegg", help="Comma-separated MSigDB collections for annotation.")
-    parser.add_argument("--annotation-species", default="human", choices=["human", "mouse"], help="MSigDB species for annotation.")
+    parser.add_argument(
+        "--annotation-collections",
+        default="hallmark,go_bp,kegg",
+        help=(
+            "Comma-separated annotation collections. Supports MSigDB collections "
+            "(for example hallmark, go_bp, go_cc, go_mf, kegg, c2_cp, c7, "
+            "msigdb_reactome) and public collections "
+            "(reactome, wikipathways, pathwaycommons)."
+        ),
+    )
+    parser.add_argument(
+        "--annotation-species",
+        default="human",
+        choices=["human", "mouse"],
+        help="Species for annotation collections and public reference downloads.",
+    )
     parser.add_argument("--annotate-programs", action=argparse.BooleanOptionalAction, default=True, help="Annotate discovered programs (default: true).")
     parser.add_argument("--annotation-topk-per-program", type=int, default=15, help="Top reference matches saved per program.")
     parser.add_argument("--annotation-min-jaccard-for-label", type=float, default=0.03, help="Minimum Jaccard required to adopt a reference-derived label.")
     parser.add_argument("--focus-genes", default="", help="Optional comma-separated genes to track in comparison outputs.")
-    parser.add_argument("--discovery-method", default="kmeans", choices=["leiden", "spectral", "kmeans", "hdbscan"], help="Program discovery method.")
-    parser.add_argument("--n-programs", type=int, default=12, help="Target number of programs for kmeans/spectral.")
+    parser.add_argument("--discovery-method", default="ensemble", choices=["ensemble", "kmeans", "leiden", "spectral", "hdbscan"], help="Program discovery method (default: ensemble = consensus of kmeans+leiden).")
+    parser.add_argument("--n-programs", type=int, default=20, help="Target number of programs for kmeans/spectral.")
     parser.add_argument("--k-neighbors", type=int, default=15, help="kNN neighbors for discovery.")
     parser.add_argument("--resolution", type=float, default=1.0, help="Leiden resolution.")
-    parser.add_argument("--n-components", type=int, default=20, help="Embedding dimension.")
+    parser.add_argument("--n-components", type=int, default=30, help="Embedding dimension.")
     parser.add_argument("--n-diffusion-steps", type=int, default=3, help="Diffusion iterations.")
     parser.add_argument("--diffusion-alpha", type=float, default=0.5, help="Diffusion self-weight.")
-    parser.add_argument("--gsea-n-perm", type=int, default=100, help="GSEA permutations.")
+    parser.add_argument("--gsea-n-perm", type=int, default=1000, help="GSEA permutations.")
     parser.add_argument("--with-dashboard", action=argparse.BooleanOptionalAction, default=True, help="Build a dashboard for each run (default: true).")
     parser.add_argument("--with-pdf", action="store_true", help="Also export dashboard figures as PDF.")
     parser.add_argument("--dashboard-top-k", type=int, default=20, help="Top-K rows used in dashboard plots.")
@@ -1298,7 +1312,7 @@ def main(argv: list[str] | None = None) -> None:
     _validate_cli_args(args)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(asctime)s [%(levelname)s] %(message)s")
 
-    outdir = Path(args.output_dir) if args.output_dir else Path("results") / f"scrna_easy_{date.today().strftime('%Y%m%d')}"
+    outdir = Path(args.output_dir) if args.output_dir else Path("results") / f"scrna_{args.case}_vs_{args.control}_{args.discovery_method}_{date.today().strftime('%Y%m%d')}"
     outdir.mkdir(parents=True, exist_ok=True)
 
     adata = ad.read_h5ad(args.adata)
@@ -1495,7 +1509,7 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         print(
-            "Hint: start with `npathway-scrna-easy --wizard-only ...` to inspect auto-detected columns and eligible cell types before the full run.",
+            "Hint: start with `npathway run scrna --wizard-only ...` to inspect auto-detected columns and eligible cell types before the full run.",
             file=sys.stderr,
         )
         raise SystemExit(1) from exc

@@ -20,6 +20,7 @@ from npathway.data.datasets import (
     convert_ensembl_to_symbol,
     download_msigdb_gmt,
     filter_gene_sets_to_adata,
+    list_supported_msigdb_collections,
     load_all_msigdb_collections,
     load_burczynski06,
     load_moignard15,
@@ -28,6 +29,11 @@ from npathway.data.datasets import (
     load_pbmc3k,
     load_pbmc68k_reduced,
     load_tabula_muris,
+)
+from npathway.data.public_references import (
+    build_public_reference_stack,
+    download_public_reference_gmt,
+    load_public_reference_gene_sets,
 )
 from npathway.data.preprocessing import (
     build_gene_embeddings_from_expression,
@@ -49,8 +55,12 @@ __all__ = [
     "load_msigdb_gene_sets",
     "load_all_msigdb_collections",
     "download_msigdb_gmt",
+    "list_supported_msigdb_collections",
     "filter_gene_sets_to_adata",
     "convert_ensembl_to_symbol",
+    "download_public_reference_gmt",
+    "load_public_reference_gene_sets",
+    "build_public_reference_stack",
     # Preprocessing
     "preprocess_adata",
     "compute_gene_correlations",

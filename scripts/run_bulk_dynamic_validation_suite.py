@@ -46,8 +46,13 @@ def _parse_labeled_path(value: str) -> tuple[str, Path]:
 
 def _load_program_enrichment_table(results_dir: Path) -> pd.DataFrame:
     """Build table with required columns for external reproducibility module."""
-    genes_path = results_dir / "program_gene_lists.csv"
-    gsea_path = results_dir / "enrichment_gsea_with_claim_gates.csv"
+    # Support both new organized layout and legacy flat layout
+    genes_path = results_dir / "membership" / "program_gene_lists.csv"
+    if not genes_path.exists():
+        genes_path = results_dir / "program_gene_lists.csv"
+    gsea_path = results_dir / "enrichment" / "enrichment_gsea_with_claim_gates.csv"
+    if not gsea_path.exists():
+        gsea_path = results_dir / "enrichment_gsea_with_claim_gates.csv"
     if not genes_path.exists():
         raise FileNotFoundError(f"Missing required file: {genes_path}")
     if not gsea_path.exists():

@@ -113,13 +113,13 @@ def _build_next_steps(mode: str, *, success: bool) -> list[str]:
     """Return short next-step guidance for the HTML report."""
     if success and mode == "bulk":
         return [
-            "Run `python scripts/run_bulk_dynamic_pathway.py ...` with the same input files.",
+            "Run `npathway run bulk ...` with the same input files.",
             "Keep `--raw-counts` enabled if your matrix contains integer count data.",
             "Open `docs/quickstart_input_guide.md` if you need a first-run walkthrough.",
         ]
     if success and mode == "scrna":
         return [
-            "Run `python scripts/run_scrna_pseudobulk_dynamic_pathway.py ...` with the same `.h5ad` file.",
+            "Run `npathway run scrna ...` with the same `.h5ad` file.",
             "Check donor/sample labels again if you change `--subset-col` or `--min-cells-per-sample`.",
             "Open `docs/quickstart_input_guide.md` if you need a first-run walkthrough.",
         ]

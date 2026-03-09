@@ -717,3 +717,58 @@ class EnsembleProgramDiscovery(BaseProgramDiscovery):
         self.programs_ = programs
         self.program_scores_ = scores
         self.confidence_ = scores
+
+        # Build soft membership from co-occurrence matrix
+        self._build_soft_membership(labels, cooccurrence, gene_names)
+
+    def _build_soft_membership(
+        self,
+        labels: np.ndarray,
+        cooccurrence: np.ndarray,
+        gene_names: list[str],
+    ) -> None:
+        """Build soft membership from co-occurrence similarity to programs.
+
+        For each gene, computes the mean co-occurrence with members of
+        each consensus program, then normalises across programs.
+
+        Parameters
+        ----------
+        labels : np.ndarray
+            Consensus cluster labels.
+        cooccurrence : np.ndarray
+            ``(n, n)`` normalised co-occurrence matrix.
+        gene_names : list[str]
+            Gene names.
+        """
+        unique_labels = sorted(set(labels))
+        prog_members: dict[int, np.ndarray] = {}
+        for lab in unique_labels:
+            prog_members[lab] = np.where(labels == lab)[0]
+
+        n_genes = len(gene_names)
+        n_progs = len(unique_labels)
+
+        # Raw soft weights: mean co-occurrence with each program's members
+        raw_weights = np.zeros((n_genes, n_progs), dtype=np.float64)
+        for p_idx, lab in enumerate(unique_labels):
+            members = prog_members[lab]
+            if len(members) == 0:
+                continue
+            for g_idx in range(n_genes):
+                raw_weights[g_idx, p_idx] = cooccurrence[g_idx, members].mean()
+
+        # Normalise per gene so weights sum to 1
+        row_sums = raw_weights.sum(axis=1, keepdims=True)
+        row_sums = np.where(row_sums == 0, 1.0, row_sums)
+        norm_weights = raw_weights / row_sums
+
+        soft: dict[str, dict[str, float]] = {}
+        for p_idx, lab in enumerate(unique_labels):
+            prog_name = f"consensus_{lab}"
+            soft[prog_name] = {
+                gene_names[g_idx]: float(norm_weights[g_idx, p_idx])
+                for g_idx in range(n_genes)
+            }
+
+        self.soft_programs_ = soft

@@ -1038,6 +1038,10 @@ class TopicModelProgramDiscovery(BaseProgramDiscovery):
         If ``coherence_threshold`` is set, topics with coherence below
         the threshold are excluded from the final programs.
 
+        Also builds :attr:`soft_programs_` containing the full topic-gene
+        weight distribution (not just top-N), enabling soft/probabilistic
+        gene-program membership.
+
         Parameters
         ----------
         weights : np.ndarray
@@ -1047,6 +1051,7 @@ class TopicModelProgramDiscovery(BaseProgramDiscovery):
         gene_names = self._gene_names
         programs: dict[str, list[str]] = {}
         scores: dict[str, list[tuple[str, float]]] = {}
+        soft: dict[str, dict[str, float]] = {}
 
         for k in range(weights.shape[0]):
             prog_name = f"topic_{k}"
@@ -1066,6 +1071,8 @@ class TopicModelProgramDiscovery(BaseProgramDiscovery):
                 continue
 
             gene_weights = weights[k]  # (V,)
+
+            # Hard programs: top-N genes
             top_indices = np.argsort(gene_weights)[::-1][: self.top_n_genes]
 
             scored_genes: list[tuple[str, float]] = []
@@ -1079,5 +1086,12 @@ class TopicModelProgramDiscovery(BaseProgramDiscovery):
             programs[prog_name] = gene_list
             scores[prog_name] = scored_genes
 
+            # Soft programs: ALL genes with their weight
+            soft[prog_name] = {
+                gene_names[i]: float(gene_weights[i])
+                for i in range(len(gene_names))
+            }
+
         self.programs_ = programs
         self.program_scores_ = scores
+        self.soft_programs_ = soft

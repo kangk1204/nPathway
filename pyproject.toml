@@ -64,6 +64,7 @@ Documentation = "https://npathway.readthedocs.io"
 Repository = "https://github.com/npathway/npathway"
 
 [project.scripts]
+npathway = "npathway.cli.main:main"
 npathway-validate-inputs = "npathway.cli.validate_inputs:main"
 npathway-demo = "npathway.cli.demo:main"
 npathway-bulk-workflow = "npathway.cli.bulk_workflow:main"

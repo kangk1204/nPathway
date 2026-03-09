@@ -1104,6 +1104,54 @@ class ClusteringProgramDiscovery(BaseProgramDiscovery):
             np.vstack(centroids) if centroids else np.empty((0, embeddings.shape[1]))
         )
 
+        # Build soft membership: cosine similarity to every centroid
+        self._build_soft_programs(embeddings, gene_names)
+
+    def _build_soft_programs(
+        self, embeddings: np.ndarray, gene_names: list[str]
+    ) -> None:
+        """Build soft membership from cosine similarity to centroids.
+
+        For each gene, computes the cosine similarity to every program
+        centroid, then applies softmax to obtain a probability distribution
+        over programs.  This allows genes to have non-zero membership in
+        multiple programs.
+
+        Parameters
+        ----------
+        embeddings : np.ndarray
+            Gene embedding matrix ``(n_genes, n_dims)``.
+        gene_names : list[str]
+            Gene identifiers aligned with *embeddings* rows.
+        """
+        if self._centroids is None or self._centroids.shape[0] == 0:
+            return
+        if self.programs_ is None:
+            return
+
+        prog_names = list(self.programs_.keys())
+        centroids = self._centroids  # (n_programs, n_dims)
+
+        # Cosine similarity: (n_genes, n_programs)
+        emb_norm = normalize(embeddings, norm="l2")
+        cent_norm = normalize(centroids, norm="l2")
+        sim_matrix = emb_norm @ cent_norm.T  # (n_genes, n_programs)
+
+        # Softmax with temperature=1.0 to get probabilities
+        # Shift for numerical stability
+        sim_shifted = sim_matrix - sim_matrix.max(axis=1, keepdims=True)
+        exp_sim = np.exp(sim_shifted)
+        soft_weights = exp_sim / exp_sim.sum(axis=1, keepdims=True)  # (n_genes, n_programs)
+
+        soft: dict[str, dict[str, float]] = {}
+        for p_idx, prog_name in enumerate(prog_names):
+            soft[prog_name] = {
+                gene_names[g_idx]: float(soft_weights[g_idx, p_idx])
+                for g_idx in range(len(gene_names))
+            }
+
+        self.soft_programs_ = soft
+
     def _compute_quality(self, embeddings: np.ndarray) -> None:
         """Compute and store comprehensive clustering quality metrics.
 

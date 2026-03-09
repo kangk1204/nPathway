@@ -137,6 +137,23 @@ def _write_hidden_factor_bulk_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
     return matrix_path, metadata_path, curated_gmt
 
 
+def test_root_cli_bulk_workflow_help() -> None:
+    """Top-level npathway CLI should expose the bulk workflow help."""
+    result = subprocess.run(
+        [sys.executable, "-m", "npathway.cli.main", "run", "bulk", "--help"],
+        cwd=ROOT,
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--matrix" in result.stdout
+    assert "--metadata" in result.stdout
+    assert "--group-col" in result.stdout
+
+
 @pytest.mark.skipif(
     not _has_r_packages("limma", "edgeR"),
     reason="batch-aware bulk workflow requires R packages limma and edgeR",
@@ -198,9 +215,11 @@ def test_bulk_workflow_cli_runs_end_to_end_with_batch_and_curated_comparison(tmp
     assert (outdir / "prepared_inputs" / "qc" / "pca_before.png").exists()
     assert (outdir / "prepared_inputs" / "qc" / "pca_after.png").exists()
     assert (outdir / "prepared_inputs" / "qc" / "pca_summary.json").exists()
-    assert (outdir / "dynamic_programs.gmt").exists()
+    assert (outdir / "discovery" / "dynamic_programs.gmt").exists()
     assert (outdir / "comparison" / "dynamic_gsea.csv").exists()
     assert (outdir / "comparison" / "curated_gsea.csv").exists()
+    assert (outdir / "comparison" / "curated_panel_gsea.csv").exists()
+    assert (outdir / "comparison" / "curated_panel_gene_sets.gmt").exists()
     assert (outdir / "comparison" / "focus_gene_membership.csv").exists()
     assert (outdir / "workflow_manifest.json").exists()
     assert "ranking_source: edgeR_glmQLF" in result.stdout

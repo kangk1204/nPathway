@@ -190,7 +190,7 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         print(
-            "Hint: run `npathway-convert-seurat --check-only` first to verify that R, Seurat, and SeuratDisk are available.",
+            "Hint: run `npathway convert seurat --check-only` first to verify that R, Seurat, and SeuratDisk are available.",
             file=sys.stderr,
         )
         raise SystemExit(1) from exc

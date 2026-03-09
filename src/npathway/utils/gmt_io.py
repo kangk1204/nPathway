@@ -366,3 +366,40 @@ def weighted_programs_to_gmt(
         len(gene_programs),
         filepath,
     )
+
+
+def read_weighted_gmt(filepath: str) -> dict[str, list[tuple[str, float]]]:
+    """Read a weighted GMT file back into a dictionary.
+
+    Parses the ``gene,weight`` format written by
+    :func:`weighted_programs_to_gmt`.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the weighted GMT file.
+
+    Returns
+    -------
+    dict[str, list[tuple[str, float]]]
+        ``{program_name: [(gene, weight), ...]}``.
+    """
+    programs: dict[str, list[tuple[str, float]]] = {}
+    with open(filepath, encoding="utf-8") as fh:
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 3:
+                continue
+            name = parts[0]
+            gene_weights: list[tuple[str, float]] = []
+            for entry in parts[2:]:
+                if "," in entry:
+                    gene, w_str = entry.rsplit(",", 1)
+                    try:
+                        gene_weights.append((gene, float(w_str)))
+                    except ValueError:
+                        gene_weights.append((entry, 1.0))
+                else:
+                    gene_weights.append((entry, 1.0))
+            programs[name] = gene_weights
+    return programs

@@ -83,9 +83,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--discovery-method",
-        default="kmeans",
-        choices=["leiden", "spectral", "kmeans", "hdbscan"],
-        help="Program discovery method.",
+        default="ensemble",
+        choices=["ensemble", "kmeans", "leiden", "spectral", "hdbscan"],
+        help="Program discovery method (default: ensemble = consensus of kmeans+leiden).",
     )
     parser.add_argument(
         "--n-programs",
@@ -133,19 +133,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument(
         "--annotate-programs",
-        action="store_true",
-        help="Annotate programs with closest reference sets (MSigDB/custom GMT).",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Annotate programs with closest reference sets (MSigDB/custom GMT). Default: true.",
     )
     parser.add_argument(
         "--annotation-collections",
         default="hallmark,go_bp,kegg",
-        help="Comma-separated MSigDB collections for annotation.",
+        help=(
+            "Comma-separated annotation collections. Supports MSigDB collections "
+            "(for example hallmark, go_bp, go_cc, go_mf, kegg, c2_cp, c7, "
+            "msigdb_reactome) and public collections "
+            "(reactome, wikipathways, pathwaycommons)."
+        ),
     )
     parser.add_argument(
         "--annotation-species",
         default="human",
         choices=["human", "mouse"],
-        help="MSigDB species for annotation.",
+        help="Species for annotation collections and public reference downloads.",
     )
     parser.add_argument(
         "--annotation-gmt",
@@ -167,8 +173,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default=None, help="Output directory.")
     parser.add_argument(
         "--with-dashboard",
-        action="store_true",
-        help="Build interactive dashboard package after the run.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Build interactive dashboard package after the run. Default: true.",
     )
     parser.add_argument(
         "--dashboard-output-dir",
@@ -480,7 +487,7 @@ def main() -> None:
         dashboard_dir = (
             Path(args.dashboard_output_dir)
             if args.dashboard_output_dir
-            else Path(result.output_dir) / "dashboard"
+            else Path(result.output_dir)
         )
         subset_suffix = (
             f" | {args.subset_col}={args.subset_value}"

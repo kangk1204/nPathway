@@ -21,9 +21,15 @@ Supported scRNA-seq datasets
 
 Supported gene-set collections
 -------------------------------
-* **MSigDB Hallmark** -- 50 well-defined biological-state gene sets.
-* **MSigDB C2:KEGG** -- KEGG pathway gene sets.
-* **MSigDB C5:GO_BP** -- Gene Ontology Biological Process gene sets.
+Common MSigDB collections exposed by this module include:
+* **Hallmark** -- 50 well-defined biological-state gene sets.
+* **GO BP / GO CC / GO MF** -- Gene Ontology biological process,
+  cellular component, and molecular function collections.
+* **Canonical pathways** -- KEGG legacy, KEGG Medicus, Reactome,
+  WikiPathways, PID, and BioCarta aliases.
+* **C2 canonical pathways** -- broader combined canonical-pathway collection.
+* **C7 immune signatures** -- Immunologic and vaccine-response signatures
+  when available for the chosen species.
 
 All downloaded files are cached under ``~/.npathway/data/`` to avoid
 repeated network transfers.
@@ -54,19 +60,60 @@ _MSIGDB_BASE_URLS: dict[str, str] = {
     "mouse": "https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2024.1.Mm/",
 }
 
-# MSigDB collection file names (symbols version) by species
+# MSigDB collection file names (symbols version) by species.
+# Note:
+# - ``reactome`` / ``wikipathways`` are already used by the public-reference
+#   loader in the end-to-end annotation CLI.  To avoid ambiguity there, the
+#   MSigDB variants are also exposed via ``msigdb_reactome`` and
+#   ``msigdb_wikipathways`` aliases.
+# - Broad's 2024.1 mouse release does not expose separate KEGG-only symbols
+#   GMTs, so the legacy ``kegg`` alias continues to point to the broader
+#   ``m2.cp`` canonical-pathway collection for backward compatibility.
 _MSIGDB_FILES: dict[str, dict[str, str]] = {
     "human": {
         "hallmark": "h.all.v2024.1.Hs.symbols.gmt",
         "kegg": "c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt",
+        "kegg_legacy": "c2.cp.kegg_legacy.v2024.1.Hs.symbols.gmt",
+        "kegg_medicus": "c2.cp.kegg_medicus.v2024.1.Hs.symbols.gmt",
+        "biocarta": "c2.cp.biocarta.v2024.1.Hs.symbols.gmt",
+        "pid": "c2.cp.pid.v2024.1.Hs.symbols.gmt",
+        "reactome": "c2.cp.reactome.v2024.1.Hs.symbols.gmt",
+        "msigdb_reactome": "c2.cp.reactome.v2024.1.Hs.symbols.gmt",
+        "wikipathways": "c2.cp.wikipathways.v2024.1.Hs.symbols.gmt",
+        "msigdb_wikipathways": "c2.cp.wikipathways.v2024.1.Hs.symbols.gmt",
+        "c2_cp": "c2.cp.v2024.1.Hs.symbols.gmt",
         "go_bp": "c5.go.bp.v2024.1.Hs.symbols.gmt",
+        "go_cc": "c5.go.cc.v2024.1.Hs.symbols.gmt",
+        "go_mf": "c5.go.mf.v2024.1.Hs.symbols.gmt",
+        "c7": "c7.all.v2024.1.Hs.symbols.gmt",
+        "c7_immunesigdb": "c7.immunesigdb.v2024.1.Hs.symbols.gmt",
+        "immunesigdb": "c7.immunesigdb.v2024.1.Hs.symbols.gmt",
+        "c7_vax": "c7.vax.v2024.1.Hs.symbols.gmt",
+        "vax": "c7.vax.v2024.1.Hs.symbols.gmt",
     },
     "mouse": {
         "hallmark": "mh.all.v2024.1.Mm.symbols.gmt",
         "kegg": "m2.cp.v2024.1.Mm.symbols.gmt",
+        "c2_cp": "m2.cp.v2024.1.Mm.symbols.gmt",
+        "reactome": "m2.cp.reactome.v2024.1.Mm.symbols.gmt",
+        "msigdb_reactome": "m2.cp.reactome.v2024.1.Mm.symbols.gmt",
+        "wikipathways": "m2.cp.wikipathways.v2024.1.Mm.symbols.gmt",
+        "msigdb_wikipathways": "m2.cp.wikipathways.v2024.1.Mm.symbols.gmt",
         "go_bp": "m5.go.bp.v2024.1.Mm.symbols.gmt",
+        "go_cc": "m5.go.cc.v2024.1.Mm.symbols.gmt",
+        "go_mf": "m5.go.mf.v2024.1.Mm.symbols.gmt",
     },
 }
+
+
+def list_supported_msigdb_collections(species: str = "human") -> tuple[str, ...]:
+    """Return supported MSigDB collection aliases for *species*."""
+    if species not in _MSIGDB_FILES:
+        raise ValueError(
+            f"Unknown MSigDB species '{species}'. "
+            f"Choose from: {sorted(_MSIGDB_FILES.keys())}"
+        )
+    return tuple(sorted(_MSIGDB_FILES[species].keys()))
 
 
 def _annotate_dataset_provenance(
@@ -481,7 +528,10 @@ def download_msigdb_gmt(
     """Download an MSigDB GMT file and return its local path.
 
     Args:
-        collection: One of ``"hallmark"``, ``"kegg"``, or ``"go_bp"``.
+        collection: Supported MSigDB collection alias such as
+            ``"hallmark"``, ``"go_bp"``, ``"go_cc"``, ``"go_mf"``,
+            ``"kegg"``, ``"c2_cp"``, ``"c7"``,
+            ``"msigdb_reactome"``, or ``"msigdb_wikipathways"``.
         species: ``"human"`` or ``"mouse"``.
         cache_dir: Override cache directory.  Defaults to
             ``~/.npathway/data/msigdb/``.
@@ -501,7 +551,7 @@ def download_msigdb_gmt(
     if collection not in _MSIGDB_FILES[species]:
         raise ValueError(
             f"Unknown MSigDB collection '{collection}'. "
-            f"Choose from: {sorted(_MSIGDB_FILES[species].keys())}"
+            f"Choose from: {list_supported_msigdb_collections(species)}"
         )
 
     filename = _MSIGDB_FILES[species][collection]
@@ -523,7 +573,10 @@ def load_msigdb_gene_sets(
     """Download and parse an MSigDB gene-set collection.
 
     Args:
-        collection: One of ``"hallmark"``, ``"kegg"``, or ``"go_bp"``.
+        collection: Supported MSigDB collection alias such as
+            ``"hallmark"``, ``"go_bp"``, ``"go_cc"``, ``"go_mf"``,
+            ``"kegg"``, ``"c2_cp"``, ``"c7"``,
+            ``"msigdb_reactome"``, or ``"msigdb_wikipathways"``.
         species: ``"human"`` or ``"mouse"``.
         cache_dir: Override cache directory.
 
@@ -548,8 +601,8 @@ def load_all_msigdb_collections(
 ) -> dict[str, dict[str, list[str]]]:
     """Download and parse all supported MSigDB collections.
 
-    Returns a nested dictionary keyed by collection name (``"hallmark"``,
-    ``"kegg"``, ``"go_bp"``), each mapping gene-set names to gene lists.
+    Returns a nested dictionary keyed by collection alias, each mapping
+    gene-set names to gene lists.
 
     Args:
         cache_dir: Override cache directory.

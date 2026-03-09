@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -13,11 +14,22 @@ import pandas as pd
 from scipy import stats
 
 from npathway.data.datasets import load_msigdb_gene_sets
+from npathway.data.public_references import load_public_reference_gene_sets
 from npathway.data.preprocessing import build_graph_regularized_embeddings
 from npathway.discovery.clustering import ClusteringProgramDiscovery
+from npathway.discovery.ensemble import EnsembleProgramDiscovery
 from npathway.evaluation.enrichment import run_enrichment
 from npathway.evaluation.metrics import benjamini_hochberg_fdr, compute_overlap_matrix
+from npathway.evaluation.pathway_annotation import (
+    family_interpretation_score,
+    reference_relevance_band,
+    reference_relevance_score,
+    source_interpretation_score,
+)
 from npathway.utils.gmt_io import read_gmt, write_gmt
+
+# Default constituent methods for ensemble discovery
+_ENSEMBLE_METHODS = ("kmeans", "leiden")
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +47,7 @@ class BulkDynamicConfig:
     matrix_orientation: str = "genes_by_samples"
     sep: str | None = None
     raw_counts: bool = True
-    discovery_method: str = "kmeans"
+    discovery_method: str = "ensemble"
     n_programs: int | None = 20
     k_neighbors: int = 15
     resolution: float = 1.0
@@ -50,7 +62,7 @@ class BulkDynamicConfig:
     n_bootstrap: int = 0
     min_stability_for_claim: float = 0.25
     random_seed: int = 42
-    annotate_programs: bool = False
+    annotate_programs: bool = True
     annotation_collections: tuple[str, ...] = ("hallmark", "go_bp", "kegg")
     annotation_species: str = "human"
     annotation_gmt_path: str | None = None
@@ -78,13 +90,78 @@ class BulkDynamicResult:
     n_annotated_programs: int | None = None
 
 
+def _build_discovery(config: BulkDynamicConfig) -> ClusteringProgramDiscovery | EnsembleProgramDiscovery:
+    """Instantiate the discovery object based on config.discovery_method."""
+    method = config.discovery_method.lower().strip()
+
+    if method == "ensemble":
+        constituents = [
+            ClusteringProgramDiscovery(
+                method=m,
+                n_programs=config.n_programs,
+                k_neighbors=config.k_neighbors,
+                resolution=config.resolution,
+                random_state=config.random_seed,
+            )
+            for m in _ENSEMBLE_METHODS
+        ]
+        # Consensus Leiden operates on a co-occurrence similarity graph
+        # which is denser/smoother than the original kNN graph, so it
+        # needs higher resolution to avoid collapsing into too few
+        # communities.  Scale up proportional to the target n_programs.
+        consensus_resolution = max(config.resolution * 3.0, 3.0)
+        return EnsembleProgramDiscovery(
+            methods=constituents,
+            consensus_method="leiden",
+            resolution=consensus_resolution,
+            adaptive_threshold=True,
+            method_weighting="coherence",
+            random_state=config.random_seed,
+        )
+
+    return ClusteringProgramDiscovery(
+        method=method,  # type: ignore[arg-type]
+        n_programs=config.n_programs,
+        k_neighbors=config.k_neighbors,
+        resolution=config.resolution,
+        random_state=config.random_seed,
+    )
+
+
+def _make_subdirs(outdir: Path) -> dict[str, Path]:
+    """Create organized subdirectories under *outdir*.
+
+    Returns a mapping of logical names to Path objects.
+    """
+    dirs: dict[str, Path] = {}
+    for name in ("discovery", "differential", "enrichment", "membership"):
+        d = outdir / name
+        d.mkdir(parents=True, exist_ok=True)
+        dirs[name] = d
+    return dirs
+
+
 def run_bulk_dynamic_pipeline(
     config: BulkDynamicConfig,
     output_dir: str | Path,
 ) -> BulkDynamicResult:
-    """Run dynamic pathway discovery from matrix+metadata inputs."""
+    """Run dynamic pathway discovery from matrix+metadata inputs.
+
+    Output directory structure::
+
+        <output_dir>/
+        ├── discovery/          # Gene programs (GMT, sizes, gene lists)
+        ├── differential/       # DE results, ranked genes for GSEA
+        ├── enrichment/         # Fisher, GSEA, contextual membership scores
+        ├── membership/         # Gene–program membership tables
+        ├── annotation/         # (optional) Program annotation matches
+        ├── stability/          # (optional) Bootstrap stability results
+        ├── run_manifest.json
+        └── summary.md
+    """
     outdir = Path(output_dir)
     outdir.mkdir(parents=True, exist_ok=True)
+    sub = _make_subdirs(outdir)
 
     expression, metadata = _load_and_align_inputs(config)
     expression = _prepare_expression(expression, raw_counts=config.raw_counts)
@@ -108,13 +185,7 @@ def run_bulk_dynamic_pipeline(
         use_raw=False,
     )
 
-    discovery = ClusteringProgramDiscovery(
-        method=config.discovery_method,  # type: ignore[arg-type]
-        n_programs=config.n_programs,
-        k_neighbors=config.k_neighbors,
-        resolution=config.resolution,
-        random_state=config.random_seed,
-    )
+    discovery = _build_discovery(config)
     discovery.fit(embeddings, gene_names)
     programs_raw = discovery.get_programs()
     program_scores_raw = discovery.get_program_scores()
@@ -123,19 +194,24 @@ def run_bulk_dynamic_pipeline(
     overlap_long_df = pd.DataFrame()
     renaming_map = {p: p for p in programs_raw}
     if config.annotate_programs:
+        annotation_dir = outdir / "annotation"
+        annotation_dir.mkdir(parents=True, exist_ok=True)
         annotation_df, overlap_long_df, renaming_map = _annotate_programs_with_references(
             programs=programs_raw,
             gene_universe=set(expression.columns.astype(str)),
             config=config,
         )
-        annotation_df.to_csv(outdir / "program_annotation_matches.csv", index=False)
-        overlap_long_df.to_csv(outdir / "program_reference_overlap_long.csv", index=False)
+        annotation_df.to_csv(annotation_dir / "program_annotation_matches.csv", index=False)
+        overlap_long_df.to_csv(annotation_dir / "program_reference_overlap_long.csv", index=False)
+        source_summary_df, family_summary_df = _summarize_reference_annotation_layers(overlap_long_df)
+        source_summary_df.to_csv(annotation_dir / "program_reference_source_summary.csv", index=False)
+        family_summary_df.to_csv(annotation_dir / "program_reference_family_summary.csv", index=False)
         pd.DataFrame(
             {
                 "program_raw": list(renaming_map.keys()),
                 "program": [renaming_map[k] for k in renaming_map],
             }
-        ).to_csv(outdir / "program_renaming_map.csv", index=False)
+        ).to_csv(annotation_dir / "program_renaming_map.csv", index=False)
 
     programs = {renaming_map[p]: genes for p, genes in programs_raw.items()}
     program_scores = {renaming_map[p]: scores for p, scores in program_scores_raw.items()}
@@ -148,7 +224,7 @@ def run_bulk_dynamic_pipeline(
         test=config.de_test,
     )
     de_df["fdr"] = benjamini_hochberg_fdr(de_df["p_value"].to_numpy(dtype=np.float64))
-    de_df.to_csv(outdir / "de_results.csv", index=False)
+    de_df.to_csv(sub["differential"] / "de_results.csv", index=False)
 
     if config.ranked_genes_path is not None:
         ranked_genes = _load_ranked_genes(
@@ -161,7 +237,7 @@ def run_bulk_dynamic_pipeline(
     else:
         ranked_genes = _build_ranked_genes(de_df)
     ranked_df = pd.DataFrame(ranked_genes, columns=["gene", "score"])
-    ranked_df.to_csv(outdir / "ranked_genes_for_gsea.csv", index=False)
+    ranked_df.to_csv(sub["differential"] / "ranked_genes_for_gsea.csv", index=False)
 
     sig_de = de_df[de_df["fdr"] <= config.de_alpha]["gene"].tolist()
     if not sig_de:
@@ -174,7 +250,7 @@ def run_bulk_dynamic_pipeline(
         method="fisher",
         background=list(expression.columns),
     )
-    fisher_df.to_csv(outdir / "enrichment_fisher.csv", index=False)
+    fisher_df.to_csv(sub["enrichment"] / "enrichment_fisher.csv", index=False)
 
     gsea_df = run_enrichment(
         gene_list=[],
@@ -203,13 +279,15 @@ def run_bulk_dynamic_pipeline(
     stability_lo: float | None = None
     stability_hi: float | None = None
     if config.n_bootstrap > 0:
+        stability_dir = outdir / "stability"
+        stability_dir.mkdir(parents=True, exist_ok=True)
         stability_df = _bootstrap_program_stability(
             expression=expression,
             labels=labels,
             reference_programs=programs,
             config=config,
         )
-        stability_df.to_csv(outdir / "bootstrap_stability.csv", index=False)
+        stability_df.to_csv(stability_dir / "bootstrap_stability.csv", index=False)
         stability_mean = float(stability_df["best_match_jaccard"].mean())
         stability_lo = float(stability_df["best_match_jaccard"].quantile(0.025))
         stability_hi = float(stability_df["best_match_jaccard"].quantile(0.975))
@@ -228,7 +306,7 @@ def run_bulk_dynamic_pipeline(
         col_ok = gsea_df[col].eq(True) | gsea_df[col].isna()
         claim_supported = claim_supported & col_ok.to_numpy(dtype=bool)
     gsea_df["claim_supported"] = claim_supported
-    gsea_df.to_csv(outdir / "enrichment_gsea_with_claim_gates.csv", index=False)
+    gsea_df.to_csv(sub["enrichment"] / "enrichment_gsea_with_claim_gates.csv", index=False)
 
     context_scores = _build_context_membership_scores(
         program_scores=program_scores,
@@ -236,10 +314,10 @@ def run_bulk_dynamic_pipeline(
         group_a=config.group_a,
         group_b=config.group_b,
     )
-    context_scores.to_csv(outdir / "contextual_membership_scores.csv", index=False)
-    _write_gene_membership_tables(context_scores, outdir)
+    context_scores.to_csv(sub["enrichment"] / "contextual_membership_scores.csv", index=False)
+    _write_gene_membership_tables(context_scores, sub["membership"])
 
-    _write_program_outputs(programs, outdir)
+    _write_program_outputs(programs, sub["discovery"])
     _write_run_manifest(
         config=config,
         outdir=outdir,
@@ -755,16 +833,26 @@ def _load_reference_gene_sets(
 
     for collection in config.annotation_collections:
         try:
-            gs = load_msigdb_gene_sets(
-                collection=collection,
-                species=config.annotation_species,
-            )
+            collection_key = str(collection).strip().lower()
+            if collection_key in {"reactome", "wikipathways", "pathwaycommons"}:
+                gs = load_public_reference_gene_sets(
+                    collection=collection_key,
+                    species=config.annotation_species,
+                )
+            else:
+                gs = load_msigdb_gene_sets(
+                    collection=collection_key,
+                    species=config.annotation_species,
+                )
             for name, genes in gs.items():
                 kept = [g for g in genes if g in gene_universe]
                 if len(kept) >= 3:
-                    refs[f"{collection.upper()}::{name}"] = kept
+                    if "::" in str(name):
+                        refs[str(name)] = kept
+                    else:
+                        refs[f"{collection.upper()}::{name}"] = kept
         except Exception as exc:
-            logger.warning("MSigDB annotation load failed for %s: %s", collection, exc)
+            logger.warning("Reference annotation load failed for %s: %s", collection, exc)
 
     return refs
 
@@ -792,6 +880,187 @@ def _sanitize_program_label(reference_name: str, max_len: int = 60) -> str:
     if not safe:
         safe = "Annotated"
     return safe[:max_len]
+
+
+def _extract_reference_source(reference_name: str) -> str:
+    """Extract source tag from a normalized reference name."""
+    raw = str(reference_name)
+    if "::" in raw:
+        return raw.split("::", 1)[0]
+    if raw.startswith("WP_"):
+        return "WP"
+    if raw.startswith("KEGG_"):
+        return "KEGG"
+    if raw.startswith("HALLMARK_"):
+        return "HALLMARK"
+    if raw.startswith("REACTOME_"):
+        return "REACTOME"
+    return "OTHER"
+
+
+def _display_reference_source(source: str) -> str:
+    """Human-readable label for a reference source."""
+    mapping = {
+        "WP": "WikiPathways",
+        "REACTOME": "Reactome",
+        "PATHWAYCOMMONS": "Pathway Commons",
+        "GO_BP": "GO BP",
+        "GO_CC": "GO CC",
+        "GO_MF": "GO MF",
+        "HALLMARK": "Hallmark",
+        "KEGG": "KEGG",
+        "CUSTOM": "Custom GMT",
+        "OTHER": "Other",
+    }
+    return mapping.get(str(source), str(source).replace("_", " "))
+
+
+def _reference_family_key(reference_name: str) -> str:
+    """Collapse near-duplicate labels into a conservative family key."""
+    raw = str(reference_name).split("::", 1)[-1]
+    raw = re.sub(r"^(GOBP|GOCC|GOMF|WP|KEGG|REACTOME|HALLMARK)_+", "", raw, flags=re.IGNORECASE)
+    tokens = re.split(r"[^A-Za-z0-9]+", raw.upper())
+    stopwords = {
+        "",
+        "PATHWAY",
+        "PATHWAYS",
+        "PROCESS",
+        "PROCESSES",
+        "SET",
+        "MODULE",
+        "MODULES",
+        "SIGNATURE",
+        "SIGNATURES",
+        "HOMO",
+        "SAPIENS",
+        "MUS",
+        "MUSCULUS",
+    }
+    kept = [token for token in tokens if token not in stopwords]
+    if not kept:
+        kept = [token for token in tokens if token]
+    return " ".join(kept)
+
+
+def _display_reference_family(family_key: str) -> str:
+    """Human-readable label for a collapsed family key."""
+    text = str(family_key).strip()
+    if not text:
+        return "Unlabeled family"
+    return text.title()
+
+
+def _summarize_reference_annotation_layers(
+    overlap_long_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Summarize annotation hits by source and collapsed reference family."""
+    empty_source = pd.DataFrame(
+        columns=[
+            "source",
+            "source_display",
+            "programs_covered",
+            "references_covered",
+            "rows",
+            "best_jaccard",
+            "mean_jaccard",
+            "best_priority_score",
+            "mean_priority_score",
+            "interpretation_score",
+        ]
+    )
+    empty_family = pd.DataFrame(
+        columns=[
+            "family_key",
+            "family_display",
+            "top_program",
+            "top_reference_name",
+            "disease_priority_score",
+            "priority_band",
+            "interpretation_score",
+            "best_jaccard",
+            "mean_jaccard",
+            "programs_covered",
+            "references_merged",
+            "source_count",
+            "sources_display",
+        ]
+    )
+    if overlap_long_df.empty or "reference_name" not in overlap_long_df.columns:
+        return empty_source, empty_family
+
+    rows = overlap_long_df.copy()
+    rows["jaccard"] = pd.to_numeric(rows.get("jaccard"), errors="coerce").fillna(0.0)
+    rows["source"] = rows["reference_name"].astype(str).map(_extract_reference_source)
+    rows["source_display"] = rows["source"].map(_display_reference_source)
+    rows["family_key"] = rows["reference_name"].astype(str).map(_reference_family_key)
+    rows["disease_priority_score"] = rows["reference_name"].astype(str).map(reference_relevance_score)
+
+    source_summary = (
+        rows.groupby(["source", "source_display"], as_index=False)
+        .agg(
+            programs_covered=("program", lambda s: s.astype(str).nunique()),
+            references_covered=("reference_name", lambda s: s.astype(str).nunique()),
+            rows=("reference_name", "size"),
+            best_jaccard=("jaccard", "max"),
+            mean_jaccard=("jaccard", "mean"),
+            best_priority_score=("disease_priority_score", "max"),
+            mean_priority_score=("disease_priority_score", "mean"),
+        )
+    )
+    source_summary["interpretation_score"] = source_summary.apply(
+        lambda row: source_interpretation_score(
+            best_priority_score=row["best_priority_score"],
+            best_jaccard=row["best_jaccard"],
+            programs_covered=int(row["programs_covered"]),
+            references_covered=int(row["references_covered"]),
+        ),
+        axis=1,
+    )
+    source_summary = source_summary.sort_values(
+        ["interpretation_score", "best_priority_score", "best_jaccard", "programs_covered", "references_covered"],
+        ascending=[False, False, False, False, False],
+    ).reset_index(drop=True)
+
+    family_rows: list[dict[str, object]] = []
+    for family_key, sub in rows.groupby("family_key", sort=False):
+        best = sub.sort_values(["jaccard", "overlap_n"], ascending=[False, False]).iloc[0]
+        sources = sorted({_display_reference_source(_extract_reference_source(name)) for name in sub["reference_name"].astype(str)})
+        priority_score = float(reference_relevance_score(str(family_key)))
+        family_rows.append(
+            {
+                "family_key": str(family_key),
+                "family_display": _display_reference_family(str(family_key)),
+                "top_program": str(best["program"]),
+                "top_reference_name": str(best["reference_name"]),
+                "disease_priority_score": priority_score,
+                "priority_band": reference_relevance_band(str(family_key)),
+                "best_jaccard": float(sub["jaccard"].max()),
+                "mean_jaccard": float(sub["jaccard"].mean()),
+                "programs_covered": int(sub["program"].astype(str).nunique()),
+                "references_merged": int(sub["reference_name"].astype(str).nunique()),
+                "source_count": int(len(sources)),
+                "sources_display": ", ".join(sources),
+            }
+        )
+    if family_rows:
+        for row in family_rows:
+            row["interpretation_score"] = family_interpretation_score(
+                reference_name=str(row["family_key"]),
+                best_jaccard=float(row["best_jaccard"]),
+                programs_covered=int(row["programs_covered"]),
+                source_count=int(row["source_count"]),
+            )
+    family_summary = (
+        pd.DataFrame(family_rows)
+        .sort_values(
+            ["interpretation_score", "disease_priority_score", "best_jaccard", "programs_covered", "references_merged"],
+            ascending=[False, False, False, False, False],
+        )
+        .reset_index(drop=True)
+        if family_rows
+        else empty_family
+    )
+    return source_summary, family_summary
 
 
 def _dedupe_name(candidate: str, used: set[str]) -> str:

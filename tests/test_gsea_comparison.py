@@ -53,10 +53,19 @@ def test_compare_curated_vs_dynamic_gsea_writes_anchor_and_focus_outputs(tmp_pat
     assert (tmp_path / "comparison" / "gsea_comparison_combined.csv").exists()
     assert (tmp_path / "comparison" / "dynamic_curated_overlap.csv").exists()
     assert (tmp_path / "comparison" / "focus_gene_membership.csv").exists()
+    assert (tmp_path / "comparison" / "curated_panel_gsea.csv").exists()
+    assert (tmp_path / "comparison" / "curated_panel_gene_sets.gmt").exists()
+    assert (tmp_path / "comparison" / "curated_panel_manifest.json").exists()
     assert (tmp_path / "comparison" / "summary.md").exists()
     assert result.anchor_program == "ProgA"
+    assert result.curated_panel_mode == "auto_result_driven"
+    assert result.n_curated_panel_sets >= 2
 
     focus = pd.read_csv(tmp_path / "comparison" / "focus_gene_membership.csv")
     trem2 = focus.loc[focus["gene"] == "TREM2"].iloc[0]
     assert bool(trem2["in_any_dynamic_program"]) is True
     assert bool(trem2["in_any_curated_set"]) is False
+
+    panel = pd.read_csv(tmp_path / "comparison" / "curated_panel_gsea.csv")
+    assert "WP_ALZHEIMERS_DISEASE" in set(panel["program"].astype(str))
+    assert "KEGG_ALZHEIMERS_DISEASE" in set(panel["program"].astype(str))

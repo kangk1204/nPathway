@@ -93,8 +93,8 @@ def test_scrna_pseudobulk_cli_runs_end_to_end(tmp_path) -> None:
     assert (outdir / "inputs" / "pseudobulk.h5ad").exists()
     assert (outdir / "inputs" / "pseudobulk_matrix.csv").exists()
     assert (outdir / "inputs" / "pseudobulk_metadata.csv").exists()
-    assert (outdir / "de_results.csv").exists()
-    assert (outdir / "dynamic_programs.gmt").exists()
+    assert (outdir / "differential" / "de_results.csv").exists()
+    assert (outdir / "discovery" / "dynamic_programs.gmt").exists()
     assert (outdir / "summary.md").exists()
 
     pb_meta = pd.read_csv(outdir / "inputs" / "pseudobulk_metadata.csv")
@@ -199,4 +199,4 @@ def test_scrna_pseudobulk_cli_runs_on_bundled_demo_dataset(tmp_path) -> None:
     assert (outdir / "inputs" / "pseudobulk.h5ad").exists()
     assert (outdir / "inputs" / "pseudobulk_matrix.csv").exists()
     assert (outdir / "inputs" / "pseudobulk_metadata.csv").exists()
-    assert (outdir / "program_annotation_matches.csv").exists()
+    assert (outdir / "annotation" / "program_annotation_matches.csv").exists()

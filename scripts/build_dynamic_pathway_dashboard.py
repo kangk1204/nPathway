@@ -20,7 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Output dashboard directory (default: <results-dir>/dashboard).",
+        help="Output dashboard directory (default: <results-dir>).",
     )
     parser.add_argument(
         "--title",
@@ -46,7 +46,7 @@ def main() -> None:
     )
 
     results_dir = Path(args.results_dir)
-    output_dir = Path(args.output_dir) if args.output_dir else results_dir / "dashboard"
+    output_dir = Path(args.output_dir) if args.output_dir else results_dir
     cfg = DashboardConfig(
         results_dir=str(results_dir),
         output_dir=str(output_dir),

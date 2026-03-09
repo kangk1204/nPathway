@@ -375,7 +375,7 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         print(
-            "Hint: use `npathway-convert-10x --check-only` first, then convert raw 10x data into .h5ad before running npathway-scrna-easy.",
+            "Hint: use `npathway convert 10x --check-only` first, then convert raw 10x data into .h5ad before running `npathway run scrna`.",
             file=sys.stderr,
         )
         raise SystemExit(1) from exc

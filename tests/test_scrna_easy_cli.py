@@ -38,6 +38,23 @@ def _has_r_packages(*packages: str) -> bool:
     return result.returncode == 0 and result.stdout.strip().upper() == "TRUE"
 
 
+def test_root_cli_scrna_easy_help() -> None:
+    """Top-level npathway CLI should expose the easy scRNA workflow help."""
+    result = subprocess.run(
+        [sys.executable, "-m", "npathway.cli.main", "run", "scrna", "--help"],
+        cwd=ROOT,
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--adata" in result.stdout
+    assert "--case" in result.stdout
+    assert "--control" in result.stdout
+
+
 @pytest.mark.parametrize("mode", ["wizard-only"])
 def test_scrna_easy_cli_wizard_autodetects_demo_columns(tmp_path, mode: str) -> None:
     """Wizard mode should auto-detect the basic demo columns and write a preflight report."""

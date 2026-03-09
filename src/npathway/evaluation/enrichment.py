@@ -1304,3 +1304,61 @@ def _apply_fdr(
     if method == "storey":
         return _storey_qvalue(p_values)
     raise ValueError(f"Unknown FDR method '{method}'. Use 'bh' or 'storey'.")
+
+
+# ------------------------------------------------------------------
+# Weighted (soft-membership) enrichment
+# ------------------------------------------------------------------
+
+
+def weighted_fisher_enrichment(
+    gene_list: list[str],
+    weighted_programs: dict[str, dict[str, float]],
+    background: list[str] | None = None,
+    weight_threshold: float = 0.1,
+) -> pd.DataFrame:
+    """Fisher's exact test with soft-membership gene programs.
+
+    Converts weighted programs to binary sets at *weight_threshold*,
+    then runs standard Fisher's test.  Also reports a ``weighted_overlap``
+    score: the sum of membership weights for overlapping genes.
+
+    Parameters
+    ----------
+    gene_list : list[str]
+        Query gene set.
+    weighted_programs : dict[str, dict[str, float]]
+        ``{program: {gene: weight}}``.
+    background : list[str] | None
+        Background gene universe.
+    weight_threshold : float
+        Minimum weight to include a gene in the binary set.
+
+    Returns
+    -------
+    pd.DataFrame
+        Enrichment results with columns: ``gene_set``, ``overlap``,
+        ``gene_set_size``, ``p_value``, ``odds_ratio``,
+        ``weighted_overlap``.
+    """
+    # Convert to hard sets at threshold
+    hard_programs: dict[str, list[str]] = {}
+    for prog, gw in weighted_programs.items():
+        hard_programs[prog] = [g for g, w in gw.items() if w >= weight_threshold]
+
+    # Run standard Fisher
+    df = _fisher_enrichment(gene_list, hard_programs, background=background)
+
+    # Add weighted overlap score
+    query_set = set(gene_list)
+    w_overlaps: list[float] = []
+    for prog in df["program"]:
+        if prog in weighted_programs:
+            gw = weighted_programs[prog]
+            wo = sum(gw.get(g, 0.0) for g in query_set if g in gw)
+            w_overlaps.append(wo)
+        else:
+            w_overlaps.append(0.0)
+    df["weighted_overlap"] = w_overlaps
+
+    return df

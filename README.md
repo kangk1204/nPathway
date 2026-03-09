@@ -1,31 +1,58 @@
 # nPathway
 
-nPathway discovers **dynamic gene programs** from transcriptomic data, aligns them to curated pathways, and returns reviewer-friendly outputs such as enrichment tables, GMT files, and dashboards.
+nPathway finds **dynamic gene programs** from transcriptomic data, aligns each program to curated pathways, and writes a local HTML dashboard that a biologist can open in a browser.
 
-This is the practical distinction from standard GSEA:
+It is designed for two common situations:
 
-- GSEA asks: does a **predefined** pathway score highly in this ranked gene list?
-- nPathway asks: what **data-driven** gene program is present here, how does it map to known pathways, and which relevant genes fall outside the original static gene-set definition?
+- GSEA says a known pathway is enriched, but you want to see the **actual data-driven gene program** behind that signal.
+- A disease signal spans more than one curated pathway, and you want a result that is easier to interpret than a long list of pathway hits.
 
-That makes nPathway useful when you want to show something like:
+nPathway works on **bulk RNA-seq** and **scRNA-seq** (through pseudobulk), and the main workflow starts from an **expression matrix plus metadata**. It does not require a DEG-only input table for the main discovery mode.
 
-- a curated Alzheimer's pathway is enriched by GSEA
-- the nPathway Alzheimer's-like program overlaps that pathway
-- the dynamic program also contains additional disease-linked genes that are biologically relevant but not present in the curated GMT definition
+![nPathway workflow overview](docs/assets/npathway_workflow_overview.png)
 
-## What You Need To Know First
+## What nPathway Gives You
 
-- nPathway does **not** require a precomputed DEG-only table for the main workflow.
-- The official discovery workflows start from an **expression matrix plus metadata**.
-- If you already have a full ranked gene table from `DESeq2`, `limma`, `edgeR`, or `dream`, you can reuse it in **comparison mode**.
-- The core product is:
-  - dynamic gene program discovery
-  - pathway alignment against curated references
-  - interpretable outputs for review and reporting
+- dynamic gene programs discovered from the data
+- pathway matches against curated references
+- a local `index.html` dashboard with **interactive plots and interactive tables**
+- CSV tables, GMT files, and figure exports for review or manuscript work
+- a cleaner way to explain why a result is biologically interesting
 
-## Fastest Start
+![nPathway dashboard preview](docs/assets/npathway_dashboard_preview.png)
 
-### Option 1. One-click install
+## Why This Is Different From Standard GSEA
+
+Standard GSEA asks:
+
+- is this **predefined** pathway enriched in my ranked gene list?
+
+nPathway asks:
+
+- what **data-derived gene program** is present in this dataset?
+- which curated pathways best explain that program?
+- which biologically relevant genes sit **outside** the original static pathway definition?
+
+That means you can make a result easier to explain. For example:
+
+- GSEA finds an Alzheimer's pathway.
+- nPathway shows the matching dynamic program.
+- that dynamic program may also contain additional disease-linked genes not included in the original curated GMT file.
+
+## First 10 Minutes
+
+### 1. Get the code
+
+```bash
+git clone https://github.com/kangk1204/nPathway.git
+cd nPathway
+```
+
+Recommended Python:
+
+- Python 3.10, 3.11, or 3.12
+
+### 2. Option 1. One-click install
 
 ```bash
 bash scripts/install_npathway_easy.sh
@@ -34,46 +61,85 @@ bash scripts/install_npathway_easy.sh
 This creates a local virtual environment, installs nPathway, and smoke-checks the installed commands.
 The installer auto-prefers `python3.11`, `python3.12`, or `python3.10` when available.
 
-After that:
+Then activate the environment and verify the install:
 
 ```bash
 source .venv/bin/activate
-npathway-demo bulk --output-dir results/demo_bulk_case_vs_control
-npathway-demo scrna --output-dir results/demo_scrna_case_vs_control
+npathway --help
+npathway quickstart
 ```
 
-### Option 2. Editable install
-
-Base install:
+### 3. Run the demo
 
 ```bash
-pip install -e .
+npathway demo bulk --output-dir results/demo_bulk_case_vs_control
+npathway demo scrna --output-dir results/demo_scrna_case_vs_control
 ```
 
-Developer install:
+Both demo commands build the dashboard by default.
+
+### 4. Open the dashboard
+
+Main files:
+
+- `results/demo_bulk_case_vs_control/index.html`
+- `results/demo_scrna_case_vs_control/index.html`
+
+Open them in any browser.
+
+On macOS:
 
 ```bash
-pip install -e ".[dev]"
+open results/demo_bulk_case_vs_control/index.html
+open results/demo_scrna_case_vs_control/index.html
 ```
 
-Optional model extras:
+On Linux:
 
 ```bash
-pip install -e ".[scgpt]"
-pip install -e ".[geneformer]"
-pip install -e ".[scbert]"
-pip install -e ".[all-models]"
+xdg-open results/demo_bulk_case_vs_control/index.html
+xdg-open results/demo_scrna_case_vs_control/index.html
 ```
 
-Installed commands:
+You can also double-click `index.html` in Finder or File Explorer.
 
-- `npathway-validate-inputs`
-- `npathway-demo`
-- `npathway-bulk-workflow`
-- `npathway-scrna-easy`
-- `npathway-compare-gsea`
-- `npathway-convert-seurat`
-- `npathway-convert-10x`
+### 5. How to read your first result
+
+Start with `index.html`.
+
+Look at the dashboard in this order:
+
+1. `Program Explorer`
+   - choose one program and let the other panels follow it
+2. `Enriched Programs`
+   - this is the fastest way to see which dynamic programs rise to the top
+   - first look at `NES`, `FDR`, and program identity
+3. `Multi-Pathway Enrichment Curves`
+   - this is the closest view to a classic GSEA enrichment plot
+   - use it to compare multiple curated pathways on the same ranked gene list
+   - the table beside it also shows `leading-edge` genes
+4. `Program vs Reference Overlap`
+   - this shows how the selected dynamic program relates to curated pathway names
+5. `Context driver genes` and `Core genes in selected program`
+   - these tell you which genes explain the biology and which genes are most central to the program
+6. `Interactive Tables`
+   - the dense tables are grouped into tabs: `Program Summary`, `Context Drivers`, and `Core Genes`
+   - this keeps the dashboard readable when labels are long
+7. `Reference Layers`
+   - this groups pathway matches by source such as `Reactome`, `WikiPathways`, `Pathway Commons`, `GO`, `Hallmark`, or `KEGG`
+   - use it to avoid mixing different knowledge layers without noticing
+
+A program is usually more interesting when:
+
+- `FDR` is low
+- `NES` is meaningfully shifted from zero
+- the program has a coherent curated match
+- the same program contains biologically plausible genes beyond the static pathway definition
+
+Important interpretation rule:
+
+- `Core-weight score` is a **within-program membership score**
+- it is **not** the same thing as log fold-change
 
 ## The 3 Main Ways To Use nPathway
 
@@ -118,7 +184,7 @@ S4,control
 Validate first:
 
 ```bash
-npathway-validate-inputs bulk \
+npathway validate bulk \
   --matrix data/my_bulk_matrix.csv \
   --metadata data/my_bulk_metadata.csv \
   --sample-col sample \
@@ -131,7 +197,7 @@ npathway-validate-inputs bulk \
 Run the beginner-friendly bulk workflow:
 
 ```bash
-npathway-bulk-workflow \
+npathway run bulk \
   --matrix data/my_bulk_matrix.csv \
   --metadata data/my_bulk_metadata.csv \
   --sample-col sample \
@@ -147,6 +213,29 @@ Notes:
 - use `--raw-counts` for count matrices
 - omit `--raw-counts` for already normalized or log-scale compatible matrices
 - the bulk workflow can also reuse an external ranked gene table with `--ranked-genes`
+- if you want a broader public reference layer for annotation, add sources such as `reactome`, `wikipathways`, or `pathwaycommons` to `--annotation-collections`
+- built-in MSigDB support is broader than the default slice and now includes aliases such as `go_cc`, `go_mf`, `c2_cp`, `c7`, `msigdb_reactome`, and `msigdb_wikipathways`
+
+Example with broader public references:
+
+```bash
+npathway run bulk \
+  --matrix data/my_bulk_matrix.csv \
+  --metadata data/my_bulk_metadata.csv \
+  --sample-col sample \
+  --group-col condition \
+  --group-a case \
+  --group-b control \
+  --raw-counts \
+  --annotation-collections hallmark,go_bp,go_cc,c2_cp,reactome,wikipathways,pathwaycommons \
+  --output-dir results/my_bulk_public_refs
+```
+
+If you want to prebuild the merged public reference GMT yourself:
+
+```bash
+npathway references build --output-dir data/reference/public
+```
 
 ### 2. Discovery mode for scRNA-seq
 
@@ -167,7 +256,7 @@ Important rule:
 
 Official scRNA route:
 
-- `npathway-scrna-easy` for the easiest path
+- `npathway run scrna` for the easiest path
 - `scripts/run_scrna_pseudobulk_dynamic_pathway.py` for the expert path
 - the official pseudobulk case/control CLI for scRNA-seq runs case/control comparisons through donor-level pseudobulk
 
@@ -179,7 +268,7 @@ Minimum rule after filtering and pseudobulk:
 Validate first:
 
 ```bash
-npathway-validate-inputs scrna \
+npathway validate scrna \
   --adata data/my_scrna.h5ad \
   --sample-col donor_id \
   --group-col condition \
@@ -192,7 +281,7 @@ npathway-validate-inputs scrna \
 Run the easy scRNA workflow:
 
 ```bash
-npathway-scrna-easy \
+npathway run scrna \
   --adata data/my_scrna.h5ad \
   --condition-col condition \
   --case case \
@@ -203,8 +292,8 @@ npathway-scrna-easy \
 If you start from Seurat or raw 10x:
 
 ```bash
-npathway-convert-seurat --check-only
-npathway-convert-10x --check-only
+npathway convert seurat --check-only
+npathway convert 10x --check-only
 ```
 
 ### 3. Comparison mode against curated GSEA
@@ -226,7 +315,7 @@ This is the cleanest mode for reviewer-facing analyses such as:
 Run it with:
 
 ```bash
-npathway-compare-gsea --help
+npathway compare --help
 ```
 
 Repository-local equivalent:
@@ -235,13 +324,17 @@ Repository-local equivalent:
 python scripts/run_curated_vs_dynamic_gsea.py --help
 ```
 
-## Quick Demo Paths
+## Quick Demo Data
 
 ### Bulk demo
 
 ```bash
-npathway-demo bulk --output-dir results/demo_bulk_case_vs_control
+npathway demo bulk --output-dir results/demo_bulk_case_vs_control
 ```
+
+This writes an interactive dashboard by default:
+
+- `results/demo_bulk_case_vs_control/index.html`
 
 Bundled demo files:
 
@@ -252,8 +345,12 @@ Bundled demo files:
 ### scRNA demo
 
 ```bash
-npathway-demo scrna --output-dir results/demo_scrna_case_vs_control
+npathway demo scrna --output-dir results/demo_scrna_case_vs_control
 ```
+
+This also writes an interactive dashboard by default:
+
+- `results/demo_scrna_case_vs_control/index.html`
 
 Bundled demo files:
 
@@ -261,21 +358,24 @@ Bundled demo files:
 - `data/scrna_demo_case_vs_ctrl/demo_scrna_obs_preview.csv`
 - `data/scrna_demo_case_vs_ctrl/scrna_reference_demo.gmt`
 
-### Input templates
+## Input Templates And Beginner Docs
 
-Templates for your own data live in:
+Templates for your own data live in `data/templates/`.
+
+Main template files:
 
 - `data/templates/bulk_matrix_template.csv`
 - `data/templates/bulk_metadata_template.csv`
 - `data/templates/scrna_obs_template.csv`
 
-The 5-minute setup guide is here:
+Beginner docs:
 
 - `docs/quickstart_input_guide.md`
-
-The discovery-vs-comparison guide is here:
-
 - `docs/discovery_vs_comparison_modes.md`
+
+Validator script:
+
+- `scripts/validate_npathway_inputs.py`
 
 ## What nPathway Produces
 
@@ -285,7 +385,8 @@ Typical outputs include:
 - `de_results.csv`
 - `ranked_genes_for_gsea.csv`
 - pathway comparison tables
-- dashboard artifacts
+- `index.html` with interactive plots and interactive tables
+- dashboard figure exports and CSV tables
 - batch-QC figures in the batch-aware workflow
 - `figure_ready/` bundles in the easy scRNA workflow
 
@@ -304,16 +405,56 @@ nPathway should not be framed as a replacement for every upstream statistical me
 - upstream DE/ranking can come from `DESeq2`, `limma`, `edgeR`, or `dream`
 - nPathway adds the dynamic gene program layer and the pathway interpretation layer
 
-## Beginner Checklist
+## Developer Install (Optional)
 
-1. Install with `bash scripts/install_npathway_easy.sh` or `pip install -e .`.
-2. Run `npathway-demo bulk` once before touching your own data.
-3. Match your files to the templates in `data/templates/`.
-4. Validate with `npathway-validate-inputs`.
-5. Run `npathway-bulk-workflow` or `npathway-scrna-easy`.
-6. Use `npathway-compare-gsea` when you want a direct curated-vs-dynamic comparison on the same ranking.
+Base install:
 
-## Advanced Utilities
+```bash
+pip install -e .
+```
+
+Developer install:
+
+```bash
+pip install -e ".[dev]"
+```
+
+Optional model extras:
+
+```bash
+pip install -e ".[scgpt]"
+pip install -e ".[geneformer]"
+pip install -e ".[scbert]"
+pip install -e ".[all-models]"
+```
+
+Beginner entrypoint:
+
+- `npathway`
+
+Installed direct aliases:
+
+- `npathway-validate-inputs`
+- `npathway-demo`
+- `npathway-bulk-workflow`
+- `npathway-scrna-easy`
+- `npathway-compare-gsea`
+- `npathway-convert-seurat`
+- `npathway-convert-10x`
+
+If you prefer the older direct aliases, these still work:
+
+- `npathway-demo bulk`
+- `npathway-demo scrna`
+- `npathway-demo`
+- `npathway-validate-inputs`
+- `npathway-bulk-workflow`
+- `npathway-scrna-easy`
+- `npathway-compare-gsea`
+- `npathway-convert-seurat`
+- `npathway-convert-10x`
+
+## Public Repository Utilities
 
 Public repository utilities kept in this checkout:
 

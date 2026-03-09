@@ -445,9 +445,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--discovery-method",
-        default="kmeans",
-        choices=["leiden", "spectral", "kmeans", "hdbscan"],
-        help="Program discovery method.",
+        default="ensemble",
+        choices=["ensemble", "kmeans", "leiden", "spectral", "hdbscan"],
+        help="Program discovery method (default: ensemble = consensus of kmeans+leiden).",
     )
     parser.add_argument("--n-programs", type=int, default=20, help="Target number of programs for kmeans/spectral.")
     parser.add_argument("--k-neighbors", type=int, default=15, help="kNN neighbors.")
@@ -485,19 +485,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument(
         "--annotate-programs",
-        action="store_true",
-        help="Annotate programs with closest reference sets (MSigDB/custom GMT).",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Annotate programs with closest reference sets (MSigDB/custom GMT). Default: true.",
     )
     parser.add_argument(
         "--annotation-collections",
         default="hallmark,go_bp,kegg",
-        help="Comma-separated MSigDB collections for annotation.",
+        help=(
+            "Comma-separated annotation collections. Supports MSigDB collections "
+            "(for example hallmark, go_bp, go_cc, go_mf, kegg, c2_cp, c7, "
+            "msigdb_reactome) and public collections "
+            "(reactome, wikipathways, pathwaycommons)."
+        ),
     )
     parser.add_argument(
         "--annotation-species",
         default="human",
         choices=["human", "mouse"],
-        help="MSigDB species for annotation.",
+        help="Species for annotation collections and public reference downloads.",
     )
     parser.add_argument("--annotation-gmt", default=None, help="Optional custom GMT file for program naming annotation.")
     parser.add_argument(
@@ -513,7 +519,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Minimum Jaccard to use reference-derived label (else Unmatched).",
     )
     parser.add_argument("--output-dir", default=None, help="Workflow output directory.")
-    parser.add_argument("--with-dashboard", action="store_true", help="Build interactive dashboard package after the run.")
+    parser.add_argument("--with-dashboard", action=argparse.BooleanOptionalAction, default=True, help="Build interactive dashboard package after the run. Default: true.")
     parser.add_argument(
         "--dashboard-output-dir",
         default=None,
@@ -983,7 +989,7 @@ def run_batch_aware_bulk_workflow(args: argparse.Namespace) -> dict[str, object]
         logging.warning("Input validation: %s", warning)
 
     outdir = Path(args.output_dir) if args.output_dir else Path("results") / (
-        f"bulk_batch_workflow_{date.today().strftime('%Y%m%d')}"
+        f"bulk_{args.group_a}_vs_{args.group_b}_{args.discovery_method}_{date.today().strftime('%Y%m%d')}"
     )
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -1042,7 +1048,7 @@ def run_batch_aware_bulk_workflow(args: argparse.Namespace) -> dict[str, object]
     if args.curated_gmt:
         comparison_result = compare_curated_vs_dynamic_gsea(
             ranked_genes_path=ranked_path,
-            dynamic_gmt_path=outdir / "dynamic_programs.gmt",
+            dynamic_gmt_path=outdir / "discovery" / "dynamic_programs.gmt",
             curated_gmt_path=args.curated_gmt,
             output_dir=outdir / "comparison",
             gene_col=ranked_gene_col,
@@ -1068,7 +1074,7 @@ def run_batch_aware_bulk_workflow(args: argparse.Namespace) -> dict[str, object]
         dashboard_dir = (
             Path(args.dashboard_output_dir)
             if args.dashboard_output_dir
-            else Path(result.output_dir) / "dashboard"
+            else Path(result.output_dir)
         )
         artifacts = build_dynamic_dashboard_package(
             DashboardConfig(
@@ -1139,7 +1145,7 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         print(
-            "Hint: validate the input first with `npathway-validate-inputs bulk ...` and "
+            "Hint: validate the input first with `npathway validate bulk ...` and "
             "keep batch/covariate columns in the metadata table.",
             file=sys.stderr,
         )

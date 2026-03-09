@@ -23,6 +23,31 @@ from npathway.reporting import DashboardConfig, build_dynamic_dashboard_package
 
 logger = logging.getLogger(__name__)
 
+_BULK_DEMO_GENES: tuple[str, ...] = (
+    "HEG1", "IRAK1", "NES", "FBXO2", "FOXO4", "ITIH5", "NWD1", "TXNRD1", "NPIPA8", "RHOQ",
+    "PPP2R1B", "ADNP2", "SLC7A1", "NQO1", "SAP30L", "MAFK", "CLIP2", "MAPK4", "LINC00472",
+    "UNC5B", "RGS5", "CHI3L1", "CAVIN1", "SYNM", "KIF1C", "PFKP", "NPAS2", "JMJD6", "ABL2",
+    "COL27A1", "DYNC1LI2", "INSIG1", "SAMD4A", "CYP2U1-AS1", "PLOD2", "SMTN", "FRAS1",
+    "SLC6A12", "HECA", "RBMS2", "ITPRID2", "WNT5A", "MTCO2P12", "FN1", "USPL1", "DOCK1",
+    "NHERF2", "FLT1", "SLC5A3", "EPAS1", "LINC02449", "MT1M", "TUBA1C", "CDKL5", "SYNE2",
+    "CCPG1", "PHF21A", "PLCB3", "COG1", "ITGA1", "NOX4", "HAP1", "FAM66D", "KLHL2",
+    "ADAM9", "ITGB1", "SCARNA2", "SFT2D2", "CALU", "CD34", "PI4KAP1", "HSPE1", "NPTX2",
+    "ENAH", "STK24", "TMTC1", "WFS1", "CMTM4", "PTMA", "HSPA6", "CSNK1A1", "APLN", "WNT2B",
+    "RCOR3", "GTF2IP4", "BAIAP3", "ELOVL5", "COL11A1", "MTR", "TMCC2", "RNU4-1", "GDF11",
+    "MPHOSPH9", "BACE2", "AIF1L", "AKAP12", "PDE10A", "COL5A3", "PIK3R3", "CD59", "LDLR",
+    "TUBAL3", "QSER1", "ANKRD9", "PIP5K1C", "MAP4K4", "TARBP1", "CHD3", "EMP1", "PITRM1",
+    "HIPK2", "DDR2", "HMBOX1", "LINC02822", "IFRD1", "FZD4", "QDPR", "TRIM41", "ELL2",
+    "MT1X", "MT1F", "ZNF710-AS1", "TXNIP", "TUBB6", "ICA1", "AGO4", "SLCO4A1", "PTPRB",
+)
+
+_SCRNA_DEMO_GENES: tuple[str, ...] = (
+    "IL7R", "LTB", "MALAT1", "IL32", "TRBC1", "TRBC2", "CD3D", "CD3E", "CD2", "PTPRC",
+    "CCR7", "SELL", "LTBP1", "MAL", "SAT1", "TIGIT", "CXCR4", "GZMK", "CCL5", "NKG7",
+    "CTSW", "IFITM1", "IFITM3", "HLA-DRA", "HLA-DRB1", "TYMP", "CXCL13", "LST1", "FCER1G",
+    "AIF1", "TYROBP", "TREM2", "APOE", "SPP1", "FTH1", "FTL", "B2M", "HLA-A", "HLA-B",
+    "STAT1", "IRF7", "ISG15", "IFI6", "MX1", "OAS1", "IFI44L", "SAMHD1", "PSMB8",
+)
+
 
 def _default_output_dir(mode: str) -> Path:
     stamp = date.today().strftime("%Y%m%d")
@@ -40,7 +65,7 @@ def _generate_bulk_demo_inputs(output_dir: Path) -> tuple[Path, Path, Path]:
     inputs_dir.mkdir(parents=True, exist_ok=True)
 
     rng = np.random.default_rng(42)
-    genes = [f"G{i:04d}" for i in range(1, 121)]
+    genes = list(_BULK_DEMO_GENES)
     samples = [f"S{i}" for i in range(1, 13)]
 
     matrix = rng.normal(loc=6.0, scale=0.45, size=(len(genes), len(samples)))
@@ -98,7 +123,7 @@ def _generate_scrna_demo_inputs(output_dir: Path) -> tuple[Path, Path]:
     inputs_dir.mkdir(parents=True, exist_ok=True)
 
     rng = np.random.default_rng(42)
-    genes = [f"G{i:03d}" for i in range(40)]
+    genes = list(_SCRNA_DEMO_GENES[:40])
     donors = ["case_1", "case_2", "ctrl_1", "ctrl_2"]
     rows: list[np.ndarray] = []
     obs_rows: list[dict[str, str]] = []
@@ -184,14 +209,14 @@ def _run_bulk_demo(output_dir: Path, *, with_dashboard: bool) -> None:
     print(f"- n_programs: {result.n_programs}")
 
     if with_dashboard:
-        dashboard_dir = Path(result.output_dir) / "dashboard"
+        dashboard_dir = Path(result.output_dir)
         artifacts = build_dynamic_dashboard_package(
             DashboardConfig(
                 results_dir=result.output_dir,
                 output_dir=str(dashboard_dir),
                 title="nPathway Demo Dashboard: case vs control",
                 top_k=12,
-                include_pdf=False,
+                include_pdf=True,
             )
         )
         print(f"- dashboard_html: {artifacts.html_path}")
@@ -278,14 +303,14 @@ def _run_scrna_demo(output_dir: Path, *, with_dashboard: bool) -> None:
     print(f"- n_programs: {result.n_programs}")
 
     if with_dashboard:
-        dashboard_dir = Path(result.output_dir) / "dashboard"
+        dashboard_dir = Path(result.output_dir)
         artifacts = build_dynamic_dashboard_package(
             DashboardConfig(
                 results_dir=result.output_dir,
                 output_dir=str(dashboard_dir),
                 title="nPathway Demo Dashboard: scRNA case vs control",
                 top_k=12,
-                include_pdf=False,
+                include_pdf=True,
             )
         )
         print(f"- dashboard_html: {artifacts.html_path}")
@@ -299,11 +324,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     bulk = subparsers.add_parser("bulk", help="Run the installed bulk demo.")
     bulk.add_argument("--output-dir", default=None, help="Output directory for bulk demo results.")
-    bulk.add_argument("--with-dashboard", action="store_true", help="Build the demo dashboard.")
+    bulk.add_argument(
+        "--with-dashboard",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Build the interactive HTML dashboard (default: true).",
+    )
 
     scrna = subparsers.add_parser("scrna", help="Run the installed scRNA pseudobulk demo.")
     scrna.add_argument("--output-dir", default=None, help="Output directory for scRNA demo results.")
-    scrna.add_argument("--with-dashboard", action="store_true", help="Build the demo dashboard.")
+    scrna.add_argument(
+        "--with-dashboard",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Build the interactive HTML dashboard (default: true).",
+    )
     return parser.parse_args(argv)
 
 

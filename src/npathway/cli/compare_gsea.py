@@ -122,7 +122,7 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         print(
-            "Hint: comparison mode needs a full ranked gene table, an nPathway dynamic GMT, and a curated GMT.",
+            "Hint: run `npathway compare ...` with a full ranked gene table, an nPathway dynamic GMT, and a curated GMT.",
             file=sys.stderr,
         )
         raise SystemExit(1) from exc

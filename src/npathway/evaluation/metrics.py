@@ -1111,3 +1111,188 @@ def fold_enrichment_with_ci(
         "ci_lower": float(ci_lower),
         "ci_upper": float(ci_upper),
     }
+
+
+# ------------------------------------------------------------------
+# Soft / weighted membership metrics
+# ------------------------------------------------------------------
+
+
+def soft_coverage(
+    soft_programs: dict[str, dict[str, float]],
+    reference_genes: list[str],
+    threshold: float = 0.1,
+) -> float:
+    """Fraction of reference genes with max membership weight >= threshold.
+
+    Parameters
+    ----------
+    soft_programs : dict[str, dict[str, float]]
+        ``{program: {gene: weight}}``.
+    reference_genes : list[str]
+        Universe of genes.
+    threshold : float
+        Minimum weight to count as covered.
+
+    Returns
+    -------
+    float
+        Coverage in ``[0, 1]``.
+    """
+    if not reference_genes:
+        return 0.0
+    ref_set = set(reference_genes)
+    covered = 0
+    for gene in ref_set:
+        max_w = max(
+            (gw.get(gene, 0.0) for gw in soft_programs.values()),
+            default=0.0,
+        )
+        if max_w >= threshold:
+            covered += 1
+    return covered / len(ref_set)
+
+
+def soft_redundancy(
+    soft_programs: dict[str, dict[str, float]],
+    threshold: float = 0.1,
+) -> float:
+    """Mean number of program memberships per gene (minus 1).
+
+    A value of 0 means each gene belongs to exactly one program (no
+    redundancy, matching the hard-partition case).  Higher values
+    indicate controlled biological overlap.
+
+    Parameters
+    ----------
+    soft_programs : dict[str, dict[str, float]]
+        ``{program: {gene: weight}}``.
+    threshold : float
+        Minimum weight to count membership.
+
+    Returns
+    -------
+    float
+        Mean excess memberships (0 = no overlap).
+    """
+    gene_counts: dict[str, int] = {}
+    for gw in soft_programs.values():
+        for gene, w in gw.items():
+            if w >= threshold:
+                gene_counts[gene] = gene_counts.get(gene, 0) + 1
+    if not gene_counts:
+        return 0.0
+    return float(np.mean(list(gene_counts.values()))) - 1.0
+
+
+def soft_specificity(
+    soft_programs: dict[str, dict[str, float]],
+) -> float:
+    """Mean specificity (1 - normalised entropy) of gene memberships.
+
+    Low entropy means genes are highly specific to one program.  Returns
+    1.0 for perfect hard partition, 0.0 for uniform membership.
+
+    Parameters
+    ----------
+    soft_programs : dict[str, dict[str, float]]
+        ``{program: {gene: weight}}``.
+
+    Returns
+    -------
+    float
+        Mean specificity in ``[0, 1]``.
+    """
+    prog_names = list(soft_programs.keys())
+    n_progs = len(prog_names)
+    if n_progs <= 1:
+        return 1.0
+
+    max_entropy = np.log(n_progs)
+    if max_entropy == 0:
+        return 1.0
+
+    # Collect all genes
+    all_genes: set[str] = set()
+    for gw in soft_programs.values():
+        all_genes.update(gw.keys())
+
+    entropies: list[float] = []
+    for gene in all_genes:
+        weights = np.array([soft_programs[p].get(gene, 0.0) for p in prog_names])
+        w_sum = weights.sum()
+        if w_sum <= 0:
+            continue
+        probs = weights / w_sum
+        # Shannon entropy
+        entropy = -float(np.sum(probs * np.log(probs + 1e-12)))
+        entropies.append(entropy)
+
+    if not entropies:
+        return 1.0
+    return 1.0 - float(np.mean(entropies)) / max_entropy
+
+
+def membership_entropy(
+    soft_programs: dict[str, dict[str, float]],
+) -> dict[str, float]:
+    """Per-gene Shannon entropy of program membership distribution.
+
+    Hub genes (participating in many programs) have high entropy.
+    Specific genes have low entropy.
+
+    Parameters
+    ----------
+    soft_programs : dict[str, dict[str, float]]
+        ``{program: {gene: weight}}``.
+
+    Returns
+    -------
+    dict[str, float]
+        ``{gene: entropy_value}``.
+    """
+    prog_names = list(soft_programs.keys())
+    all_genes: set[str] = set()
+    for gw in soft_programs.values():
+        all_genes.update(gw.keys())
+
+    result: dict[str, float] = {}
+    for gene in all_genes:
+        weights = np.array([soft_programs[p].get(gene, 0.0) for p in prog_names])
+        w_sum = weights.sum()
+        if w_sum <= 0:
+            result[gene] = 0.0
+            continue
+        probs = weights / w_sum
+        entropy = -float(np.sum(probs * np.log(probs + 1e-12)))
+        result[gene] = entropy
+    return result
+
+
+def soft_comprehensive_evaluation(
+    soft_programs: dict[str, dict[str, float]],
+    reference_genes: list[str],
+    threshold: float = 0.1,
+) -> dict[str, float]:
+    """Compute all soft membership metrics.
+
+    Parameters
+    ----------
+    soft_programs : dict[str, dict[str, float]]
+        ``{program: {gene: weight}}``.
+    reference_genes : list[str]
+        Universe of genes.
+    threshold : float
+        Membership weight threshold.
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary of soft metric values.
+    """
+    return {
+        "soft_coverage": soft_coverage(soft_programs, reference_genes, threshold),
+        "soft_redundancy": soft_redundancy(soft_programs, threshold),
+        "soft_specificity": soft_specificity(soft_programs),
+        "n_programs": float(len(soft_programs)),
+    }

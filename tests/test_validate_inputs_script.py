@@ -54,6 +54,43 @@ def test_validate_inputs_cli_writes_html_report_for_valid_bulk(tmp_path) -> None
     assert "n_group_a" in html_text
 
 
+def test_root_cli_validate_bulk_writes_html_report_for_valid_bulk(tmp_path) -> None:
+    """Top-level npathway CLI should dispatch to bulk validation."""
+    html_path = tmp_path / "bulk_validation_root.html"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "npathway.cli.main",
+            "validate",
+            "bulk",
+            "--matrix",
+            str(DEMO_DIR / "bulk_matrix_case_ctrl_demo.csv"),
+            "--metadata",
+            str(DEMO_DIR / "bulk_metadata_case_ctrl_demo.csv"),
+            "--sample-col",
+            "sample",
+            "--group-col",
+            "condition",
+            "--group-a",
+            "case",
+            "--group-b",
+            "control",
+            "--html-out",
+            str(html_path),
+        ],
+        cwd=ROOT,
+        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert html_path.exists()
+    assert "VALID" in html_path.read_text(encoding="utf-8")
+
+
 def test_validate_inputs_cli_writes_html_report_for_invalid_bulk(tmp_path) -> None:
     """Validator should still export HTML when validation fails."""
     matrix = pd.DataFrame(

@@ -114,6 +114,8 @@ else
 fi
 
 if [[ "$SMOKE_CHECK" -eq 1 ]]; then
+  run_cmd "$VENV_DIR/bin/npathway" --help
+  run_cmd "$VENV_DIR/bin/npathway" quickstart
   run_cmd "$VENV_DIR/bin/npathway-validate-inputs" --help
   run_cmd "$VENV_DIR/bin/npathway-demo" --help
   run_cmd "$VENV_DIR/bin/npathway-bulk-workflow" --help
@@ -125,9 +127,12 @@ fi
 
 printf '\nNext steps\n'
 printf '%s\n' "1. source ${VENV_DIR}/bin/activate"
-printf '%s\n' "2. npathway-demo bulk --output-dir results/demo_bulk_case_vs_control"
-printf '%s\n' "3. npathway-demo scrna --output-dir results/demo_scrna_case_vs_control"
-printf '%s\n' "4. npathway-scrna-easy --wizard-only --adata data/my_scrna.h5ad --condition-col condition --case case --control control"
+printf '%s\n' "2. npathway quickstart"
+printf '%s\n' "3. npathway demo bulk --output-dir results/demo_bulk_case_vs_control"
+printf '%s\n' "4. npathway demo scrna --output-dir results/demo_scrna_case_vs_control"
+printf '%s\n' "5. open results/demo_bulk_case_vs_control/index.html"
+printf '%s\n' "6. open results/demo_scrna_case_vs_control/index.html"
+printf '%s\n' "7. npathway run scrna --wizard-only --adata data/my_scrna.h5ad --condition-col condition --case case --control control"
 
 if command -v Rscript >/dev/null 2>&1; then
   if Rscript -e "pkgs <- c('limma','edgeR'); quit(status = ifelse(all(sapply(pkgs, requireNamespace, quietly=TRUE)), 0, 1))" >/dev/null 2>&1; then

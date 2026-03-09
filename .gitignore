@@ -67,17 +67,32 @@ benchmark_multi_dataset.pdf
 .r-lib/
 codex-parallel.log
 CLAUDE.md
+AGENTS.md
 foundation_model_gene_programs_prompts.md
 run_codex_parallel.sh
 repro/
 
 # Downloaded datasets
 data/external/
+data/AD_datasets/
+paper.zip
 
 # Private manuscript and submission materials
 paper/
+100_Manuscript/
+submission_readiness_20260309/
 final_delivery_*/
 docs/alzheimers_case_study_plan_*.md
+docs/ad_multicohort_recurrence_runbook_*.md
+docs/ad_recurrence_summary_*.csv
+docs/ad_recurrence_summary_*.md
+docs/disease_recurrence_figure_plan_*.md
+docs/figure_6_caption_starter_*.md
+docs/manuscript_dataset_*.md
+docs/manuscript_figure_dataset_selection_*.md
+docs/manuscript_input_paths_*.md
+docs/methods_manuscript_strategy_*.md
+docs/public_mdd_cohort_candidates_*.md
 docs/methods_submission_*.md
 docs/methods_special_issue_submission_plan_*.md
 docs/methods_cover_letter_draft_*.md
@@ -97,12 +112,26 @@ scripts/run_gse203206_case_study.py
 scripts/run_gse147528_ec_case_study.py
 scripts/run_gse203206_common_de_comparison.py
 scripts/run_gse214921_mdd_case_study.py
+scripts/run_4ad_analyses.py
+scripts/run_ad_analysis.py
+scripts/run_ad_celltype_analysis.py
+scripts/run_ad_multipathway.py
+scripts/run_discussed_cohorts_bundle.py
 scripts/build_de_ranking_sensitivity_figure.py
 scripts/build_bulk_common_de_engine_figure.py
 scripts/build_mdd_deseq2_validation_figure.py
+scripts/build_ad_recurrence_overview.py
+scripts/build_ad_recurrence_summary.py
+scripts/extract_gene_scores.py
+scripts/generate_all_pathway_figures.py
+scripts/generate_biology_figures.py
+scripts/generate_convergence_plot.py
+scripts/generate_publication_figures.py
+scripts/permutation_test_gwas.py
 tests/test_de_ranking_sensitivity_figure.py
 tests/test_bulk_common_de_engine_figure.py
 tests/test_mdd_deseq2_validation_figure.py
+tests/test_ad_recurrence_artifacts.py
 tests/test_manuscript_consistency.py
 tests/test_manuscript_consistency_checker.py
 tests/test_submission_stats_package.py
