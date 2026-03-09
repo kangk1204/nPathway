@@ -10,6 +10,7 @@ from npathway.data.public_references import build_public_reference_stack
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments for building the public pathway reference stack."""
     parser = argparse.ArgumentParser(
         description=(
             "Download and merge public pathway collections for nPathway annotation. "
@@ -44,6 +45,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Run the public-reference build command and print a JSON summary."""
     args = parse_args(argv)
     collections = tuple(
         item.strip().lower()

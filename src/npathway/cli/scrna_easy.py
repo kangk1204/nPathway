@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class DetectionResult:
+    """Auto-detected scRNA column mapping and associated warnings."""
     sample_col: str | None
     group_col: str | None
     cell_type_col: str | None
@@ -38,6 +39,7 @@ class DetectionResult:
 
 @dataclass
 class CellTypePlan:
+    """Execution plan and eligibility summary for one cell-type subset."""
     label: str
     total_cells: int
     retained_samples: int
@@ -49,6 +51,7 @@ class CellTypePlan:
 
 @dataclass
 class CellTypeRunResult:
+    """Serialized outcome for one executed cell-type analysis run."""
     label: str
     output_dir: str
     dashboard_html: str | None

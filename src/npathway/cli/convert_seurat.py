@@ -13,6 +13,7 @@ from pathlib import Path
 
 @dataclass
 class RPackageStatus:
+    """Availability status for one required R package."""
     name: str
     available: bool
 
@@ -104,6 +105,7 @@ def _write_status_report(path: Path, *, input_path: Path | None, output_path: Pa
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments for Seurat-to-h5ad conversion."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seurat-rds", default=None, help="Path to the input Seurat .rds object.")
     parser.add_argument("--output-h5ad", default=None, help="Output .h5ad path (default: same stem as --seurat-rds).")
@@ -115,6 +117,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Run the public Seurat conversion entrypoint."""
     args = parse_args(argv)
     statuses = _check_r_packages()
     ready = all(item.available for item in statuses)

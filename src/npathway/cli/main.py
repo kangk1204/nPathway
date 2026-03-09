@@ -189,6 +189,7 @@ def _handle_references(argv: list[str]) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Dispatch the top-level public nPathway CLI."""
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help", "help"}:
         _print(_TOP_LEVEL_HELP)

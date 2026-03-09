@@ -269,6 +269,7 @@ def _convert_manifest(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments for 10x-to-h5ad conversion."""
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=False)
     mode.add_argument("--tenx-h5", default=None, help="Path to a single 10x .h5 file.")
@@ -290,6 +291,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Run the public 10x conversion entrypoint."""
     args = parse_args(argv)
     deps = _dep_status()
     ready = all(deps.values())
