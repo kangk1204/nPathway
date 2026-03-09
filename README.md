@@ -19,8 +19,6 @@ nPathway works on **bulk RNA-seq** and **scRNA-seq** (through pseudobulk), and t
 - CSV tables, GMT files, and figure exports for review or manuscript work
 - a cleaner way to explain why a result is biologically interesting
 
-![nPathway dashboard preview](docs/assets/npathway_dashboard_preview.png)
-
 ## Why This Is Different From Standard GSEA
 
 Standard GSEA asks:
@@ -140,6 +138,8 @@ Important interpretation rule:
 
 - `Core-weight score` is a **within-program membership score**
 - it is **not** the same thing as log fold-change
+
+![nPathway dashboard preview](docs/assets/npathway_dashboard_preview.png)
 
 ## The 3 Main Ways To Use nPathway
 
